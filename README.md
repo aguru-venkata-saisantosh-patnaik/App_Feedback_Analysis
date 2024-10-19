@@ -5,14 +5,14 @@
 The **AI_Driven_App_Feedback_Analysis** project focuses on analyzing customer feedback from mobile applications using advanced natural language processing (NLP) techniques. This project aims to extract meaningful insights from user reviews, enabling app developers and product managers to enhance user experience and drive product improvements. By employing sentiment analysis and topic modeling, this project provides a comprehensive understanding of user sentiments, common issues, and features appreciated by users. 
 
 ## Workflow
-**Data Scraping**: We scrape user reviews from the Google Play Store using web scraping techniques.
-**Data Storage**: The collected reviews are stored in a structured format (CSV or database) for further processing.
-**Data Cleaning and Preprocessing**: The raw data undergoes cleaning to remove unnecessary characters, HTML tags, and duplicates. The text is then tokenized, normalized, and prepared for analysis.
-**Text Processing**: We then perform tokenization, part-of-speech tagging, and lemmatization.
-**Sentiment Analysis**: We utilize TextBlob for sentiment analysis to determine the polarity (positive, negative, or neutral) of each review.
-**Topic Modeling**: Leveraging the LDA (Latent Dirichlet Allocation) model, we identify and extract key topics from the reviews.
-**Insight Generation**: Using the Cohere AI API, we generate insights based on the extracted topics and sentiments. The generated insights are processed for clarity and relevance.
-**Visual Analytics**: We create visual representations of the findings, including word clouds, bar charts for sentiment distribution, and trends over time.
+- **Data Scraping**: We scrape user reviews from the Google Play Store using web scraping techniques. <br/>
+- **Data Storage**: The collected reviews are stored in a structured format (CSV or database) for further processing.<br/>
+- **Data Cleaning and Preprocessing**: The raw data undergoes cleaning to remove unnecessary characters, HTML tags, and duplicates. The text is then tokenized, normalized, and prepared for analysis.<br/>
+- **Text Processing**: We then perform tokenization, part-of-speech tagging, and lemmatization.<br/>
+- **Sentiment Analysis**: We utilize TextBlob for sentiment analysis to determine the polarity (positive, negative, or neutral) of each review.<br/>
+- **Topic Modeling**: Leveraging the LDA (Latent Dirichlet Allocation) model, we identify and extract key topics from the reviews.<br/>
+- **Insight Generation**: Using the Cohere AI API, we generate insights based on the extracted topics and sentiments. The generated insights are processed for clarity and relevance.<br/>
+- **Visual Analytics**: We create visual representations of the findings, including word clouds, bar charts for sentiment distribution, and trends over time.<br/>
 
 ## Key Objectives
 
