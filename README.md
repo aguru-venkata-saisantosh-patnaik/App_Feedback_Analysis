@@ -40,9 +40,8 @@ This project leverages various technologies and libraries, including:
 
 - **Programming Language**: Python
 - **Data Analysis**: Pandas, NumPy
-- **Data Visualization**: Matplotlib, Seaborn
+- **Data Visualization**: Matplotlib, Seaborn, Wordcloud
 - **Natural Language Processing**: NLTK, Gensim, TextBlob
-- **Machine Learning**: Scikit-learn
 - **Generative AI**: Gemini API
 - **Development Environment**: Jupyter Notebook
 
