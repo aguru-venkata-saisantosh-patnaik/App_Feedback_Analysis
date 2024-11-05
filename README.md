@@ -11,7 +11,7 @@ The **App_Feedback_Analysis** project focuses on analyzing customer feedback fro
 - **Text Processing**: We then perform tokenization, part-of-speech tagging, and lemmatization.<br/>
 - **Sentiment Analysis**: We utilize TextBlob for sentiment analysis to determine the polarity (positive, negative, or neutral) of each review.<br/>
 - **Topic Modeling**: Leveraging the LDA (Latent Dirichlet Allocation) model, we identify and extract key topics from the reviews.<br/>
-- **Insight Generation**: Using the Cohere AI API, we generate insights based on the extracted topics and sentiments. The generated insights are processed for clarity and relevance.<br/>
+- **Insight Generation**: Using the Gemini API, we generate insights based on the extracted topics and sentiments. The generated insights are processed for clarity and relevance.<br/>
 - **Visual Analytics**: We create visual representations of the findings, including word clouds, bar charts for sentiment distribution, and trends over time.<br/>
 
 ## Key Objectives
@@ -22,7 +22,7 @@ The **App_Feedback_Analysis** project focuses on analyzing customer feedback fro
 - **Text Processing**: Apply various NLP techniques to prepare the text data for analysis.
 - **Sentiment Analysis**: Evaluate user sentiments in app reviews to categorize them as positive, negative, or neutral.
 - **Topic Modeling**: Identify prevalent topics discussed in user feedback using Latent Dirichlet Allocation (LDA).
-- **Generative AI Insights**: Use the Cohere AI API to generate actionable insights based on the processed data.
+- **Generative AI Insights**: Use the Gemini API to generate actionable insights based on the processed data.
 - **Visual Analytics**: Create visualizations to depict sentiment trends over time and highlight common topics in user reviews.
 
 ## Features
@@ -31,7 +31,7 @@ The **App_Feedback_Analysis** project focuses on analyzing customer feedback fro
 - **Data Processing**: Conduct data cleaning, preprocessing, and text processing to prepare the data for analysis.
 - **Sentiment Scoring**: Utilize NLP libraries to analyze and score the sentiment of reviews.
 - **Topic Identification**: Employ LDA to extract and present the most discussed topics among users.
-- **Generative AI Insights**: Generate insights and recommendations from the analyzed data using the Cohere AI API inference.
+- **Generative AI Insights**: Generate insights and recommendations from the analyzed data using the Gemini API inference.
 - **Visualization Tools**: Create graphs and charts to visualize sentiment trends and the frequency of identified topics, presented in a clean and neat format.
 
 ## Technologies Used
@@ -43,7 +43,7 @@ This project leverages various technologies and libraries, including:
 - **Data Visualization**: Matplotlib, Seaborn
 - **Natural Language Processing**: NLTK, Gensim, TextBlob
 - **Machine Learning**: Scikit-learn
-- **Generative AI**: Cohere AI API
+- **Generative AI**: Gemini API
 - **Development Environment**: Jupyter Notebook
 
 ## Potential Use Cases
