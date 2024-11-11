@@ -1,11 +1,5 @@
 # App_Feedback_Analysis
 
-## App Link
-
-https://ai-app-feedback-analysis.streamlit.app/
-
-Hosted using Streamlit
-
 ## Project Overview
 
 The **App_Feedback_Analysis** project focuses on analyzing customer feedback from mobile applications using advanced natural language processing (NLP) techniques. This project aims to extract meaningful insights from user reviews, enabling app developers and product managers to enhance user experience and drive product improvements. By employing sentiment analysis and topic modeling, this project provides a comprehensive understanding of user sentiments, common issues, and features appreciated by users. 
