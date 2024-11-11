@@ -1,0 +1,10 @@
+streamlit
+pandas
+matplotlib
+seaborn
+google-play-scraper
+textblob
+nltk
+gensim
+wordcloud
+requests
