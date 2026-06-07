@@ -36,6 +36,8 @@ This project builds an end-to-end NLP pipeline for extracting structured product
 
 **Problem Statement:** How can Meesho raise AOV and NMV by expanding into higher-value categories without alienating its price-sensitive Tier-2/3 user base?
 
+![Executive Summary](images/executive_summary.png)
+
 **Key Meesho metrics (FY25, Meesho IPO Filing):**
 
 | Metric | Value |
@@ -88,11 +90,15 @@ STAGE 6 — Visual Analytics
 - **LDA (k=5 per subset):** balances topic granularity vs. interpretability for a 100k-review corpus; k was validated via coherence scores
 - **Gemini API** for insight synthesis: translates raw topic clusters into structured product recommendations that can directly feed a PM or strategy workflow
 
+![Technical Pipeline](images/technical_pipeline.png)
+
 ---
 
 ## 📊 Results & Key Findings
 
 ### Sentiment Distribution
+
+![Sentiment Analysis & Top Themes](images/sentiment_analysis.png)
 
 | Sentiment | Review Count | Share |
 |---|---|---|
@@ -128,6 +134,8 @@ Overall sentiment skews strongly positive, but the 12.6% negative cohort (12,576
 
 The NLP output fed directly into a five-theme ICE-prioritised action plan for the Meesho case study:
 
+![Strategic Action Plan](images/strategic_action_plan.png)
+
 | Theme | Action | ICE Score | Priority |
 |---|---|---|---|
 | Returns & Trust Issues | Tighten seller verification, automate refunds, add Verified badge | 320 | High |
@@ -135,6 +143,8 @@ The NLP output fed directly into a five-theme ICE-prioritised action plan for th
 | App / Checkout Friction | Fix high-impact bugs, simplify checkout, 1-tap payment | 252 | Medium |
 | Counterfeit / Misleading Deals | Verified-listing program, rapid takedown for repeat offenders | 240 | Medium |
 | Regional Language Complaints | Localise UI and help content, route reviews to regional CS teams | 210 | Low |
+
+![ICE Prioritisation & Roadmap](images/ice_prioritisation.png)
 
 The case study also covers market sizing (TAM/SAM/SOM), competitive positioning vs. Flipkart/Amazon/reseller apps, user persona mapping (Value-Seeking Shopper, Emerging Urban Shopper, Micro-Entrepreneur Seller), full customer journey analysis, and a pilot → measure → scale roadmap.
 
@@ -146,6 +156,12 @@ The case study also covers market sizing (TAM/SAM/SOM), competitive positioning 
 App_Feedback_Analysis/
 │
 ├── AI_App_Review_Insights.ipynb   # Full pipeline: scraping → preprocessing → sentiment → LDA → Gemini insights → visualisations
+├── images/
+│   ├── executive_summary.png      # Problem statement & Meesho KPIs
+│   ├── technical_pipeline.png     # End-to-end methodology & validation
+│   ├── sentiment_analysis.png     # Sentiment distribution + LDA themes
+│   ├── strategic_action_plan.png  # Five-theme action plan with metrics
+│   └── ice_prioritisation.png     # ICE scores + pilot → measure → scale roadmap
 ├── requirements.txt               # Python dependencies
 └── README.md
 ```
