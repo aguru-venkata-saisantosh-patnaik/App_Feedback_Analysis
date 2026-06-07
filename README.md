@@ -1,4 +1,4 @@
-# 📱 App Feedback Analysis — Meesho Play Store NLP Pipeline
+# 📱 App Feedback Analysis - Meesho Play Store NLP Pipeline
 
 **NLP pipeline that scrapes Google Play reviews at scale, runs sentiment analysis and LDA topic modeling, and generates Gemini-powered strategic insights — applied to a Meesho product case study.**
 
