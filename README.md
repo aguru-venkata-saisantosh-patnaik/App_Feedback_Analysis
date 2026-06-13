@@ -5,7 +5,6 @@
 > Sample: Latest 100,000 Google Play Store reviews · Analysed: October 2025 · Output: Sentiment split + 15 LDA topics + AI-generated recommendations
 
 ---
-
 ## 📌 Table of Contents
 
 - [Project Overview](#-project-overview)
