@@ -1,0 +1,11 @@
+services:
+  - name: review-diagnostic
+    type: web
+    runtime: python
+    plan: free
+    rootDir: ./webapp
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: RESEND_API_KEY
+        sync: false
