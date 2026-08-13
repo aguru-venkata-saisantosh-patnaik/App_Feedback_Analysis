@@ -1,253 +1,147 @@
-# 📱 App Feedback Analysis with Play Store NLP Pipeline
+# Play Store Review Diagnostic
 
-**NLP pipeline that scrapes Google Play reviews at scale, runs sentiment analysis and LDA topic modeling, and generates Gemini-powered strategic insights — applied to a Meesho product case study.**
+A statistical pipeline for finding out what's actually driving negative app
+reviews, and whether it's gotten better or worse over time — built as a
+case study on Blinkit, then generalized into a self-serve web app that
+works on any Play Store app.
 
-> Sample: Latest 100,000 Google Play Store reviews · Analysed: October 2025 · Output: Sentiment split + 15 LDA topics + AI-generated recommendations
+## Table of Contents
 
----
-## 📌 Table of Contents
+- [What this is](#what-this-is)
+- [Method, in short](#method-in-short)
+- [The Blinkit case study](#the-blinkit-case-study)
+- [The generalized web app](#the-generalized-web-app)
+- [Repository structure](#repository-structure)
+- [Running it](#running-it)
+- [Deploying the web app](#deploying-the-web-app)
+- [Earlier project (V1)](#earlier-project-v1)
 
-- [Project Overview](#-project-overview)
-- [Case Study Context](#-case-study-context)
-- [Technical Pipeline](#-technical-pipeline)
-- [Results & Key Findings](#-results--key-findings)
-  - [Sentiment Distribution](#sentiment-distribution)
-  - [Positive Themes (LDA)](#positive-themes-lda)
-  - [Negative Themes (LDA)](#negative-themes-lda)
-- [Strategic Insights Applied](#-strategic-insights-applied)
-- [Repository Structure](#-repository-structure)
-- [How to Run](#-how-to-run)
-- [API Key Setup](#-api-key-setup)
-- [Dependencies](#-dependencies)
-- [Limitations & Caveats](#-limitations--caveats)
+## What this is
 
----
+Two things, same underlying methodology:
 
-## 📖 Project Overview
+1. **[`final_pipeline_V2.ipynb`](final_pipeline_V2.ipynb)** — the 10-stage
+   analysis pipeline that produced **[`Blinkit_Case_Study_2.pdf`](Blinkit_Case_Study_2.pdf)**.
+2. **[`webapp/`](webapp/)** — the same methodology, productized: paste any
+   Play Store app and package ID, get the same kind of diagnostic report
+   back, on demand.
 
-This project builds an end-to-end NLP pipeline for extracting structured product intelligence from Google Play Store reviews. The pipeline scrapes reviews at scale, runs sentiment classification and topic modeling, and uses the Gemini API to generate actionable product recommendations — all grounded in real user voice data.
+The pipeline notebook is the actual analysis code behind the case study —
+included to document exactly how the finding was produced, not as a
+turnkey script (it expects pre-scraped, pre-processed review data as
+input, which isn't checked into this repo). The web app is the
+generalized, runnable version of the same idea.
 
-**The pipeline was applied to Meesho** (one of India's largest social commerce platforms) as part of a structured product case study on growing Net Merchandise Value (NMV) and Average Order Value (AOV) while retaining its value-focused user base.
+## Method, in short
 
----
+Reviews are embedded (`sentence-transformers`) and clustered (UMAP +
+HDBSCAN + BERTopic) into complaint categories from their own vocabulary —
+not a pre-written keyword list. Each category's rate is compared between
+two time cohorts with a two-proportion z-test and Cohen's h effect size,
+corrected for testing many categories at once (Benjamini–Hochberg; the
+case study notebook additionally separates pre-registered hypotheses out
+under Bonferroni). A finding only counts if it also survives a
+version-mix robustness reweighting check — significance alone was never
+treated as evidence on its own.
 
-## 💡 Case Study Context
+## The Blinkit case study
 
-**Problem Statement:** How can Meesho raise AOV and NMV by expanding into higher-value categories without alienating its price-sensitive Tier-2/3 user base?
+**[Blinkit_Case_Study_2.pdf](Blinkit_Case_Study_2.pdf)** — a 16-slide deck
+walking through the finding: cold-chain failure (melted/spoiled items) is
+the only complaint category that both moved significantly
+quarter-over-quarter *and* survived reweighting for app-version mix *and*
+replicated in an independently-run pipeline. Customer service, delivery
+speed, and cancellations — the categories a keyword-based analysis would
+have reached for first — did not.
 
-![Executive Summary](images/executive_summary.png)
+**[final_pipeline_v2_architecture.html](final_pipeline_v2_architecture.html)**
+— the 10-stage architecture diagram the notebook implements.
 
-**Key Meesho metrics (FY25, Meesho IPO Filing):**
+**[final_pipeline_V2.ipynb](final_pipeline_V2.ipynb)** — the pipeline itself:
 
-| Metric | Value |
+| Stage | What it does |
 |---|---|
-| Net Merchandise Value (NMV) | ₹30,000 Cr |
-| Average Order Value (AOV) | ₹315 – ₹370 |
-| Annual Transacting Users | 187 million |
-| Placed Orders (FY25) | ~1.8 billion |
+| Population split | Dedupe to review level, parse dates, split into strict Negative / Neutral / Positive rating bands across every quarter |
+| Discovery — Negative / Neutral / Positive | Three independent embed → UMAP → BERTopic passes, one per band, each with its own resolution search; only Negative's categories feed the stats, Neutral/Positive are exploratory deck content |
+| Generalized measurement | Measures every review, every quarter, every band against the Negative category centroids, version-blind |
+| Stats engine | Two-proportion z-test + Cohen's h per category, sample-size floor, two-tier correction (Bonferroni for pre-registered hypotheses, Benjamini–Hochberg for clustering-discovered ones) |
+| Version-mix robustness | Reweights the later cohort's version-specific rates to the earlier cohort's version mix, checks whether each significant finding survives |
+| Co-occurrence & deep dives | Root-cause crosstabs (e.g. what else co-occurs with "customer care" complaints) and a pre/post-1P wastage deep dive |
+| Ranked diagnostic assembly | Assembles the five final output tables that feed the deck's slides, deterministically, from the upstream stages |
 
-The NLP pipeline was used to extract the real voice of Meesho's users at scale — identifying what is working and what is broken — to ground the strategic recommendations in data rather than assumption.
+## The generalized web app
 
----
+`webapp/` turns the same methodology into a tool that works on any Play
+Store app, not just Blinkit — no hardcoded hypotheses, no fixed keyword
+lists, no Blinkit-specific dates.
 
-## ⚙️ Technical Pipeline
+- Paste a package ID and pick how many reviews to analyze.
+- **Up to 200 reviews**: instant, rendered in-browser.
+- **201–1,000 reviews**: queued as a background job, results emailed
+  (via [Resend](https://resend.com)) since the run is too slow to wait on.
+- Reviews are auto-split into two cohorts by recency (most recent half vs.
+  prior half); categories are discovered directly from review text, and
+  each category's share of the Negative band is compared across cohorts
+  with the same z-test / Cohen's h / Benjamini–Hochberg approach above.
+- Nothing is stored — every run is stateless.
 
-The notebook (`AI_App_Review_Insights.ipynb`) implements the following stages end-to-end:
+See [`webapp/README.md`](webapp/README.md) for the full layout and local
+dev instructions.
 
-```
-STAGE 1 — Data Collection
-  └── Scrape latest 100,000 Google Play Store reviews via google-play-scraper
-
-STAGE 2 — Preprocessing
-  └── Tokenization → lowercase → punctuation removal → stopword removal (NLTK)
-  └── Lemmatization for LDA input
-
-STAGE 3 — Sentiment Analysis
-  └── TextBlob polarity scoring → classify each review as Positive / Neutral / Negative
-  └── Output: three labelled subsets for topic modelling
-
-STAGE 4 — Topic Modelling (LDA)
-  └── gensim LDA applied separately on each sentiment subset
-  └── k = 5 topics per subset (15 topics total)
-  └── Dictionary filtered for low-frequency and high-frequency terms
-  └── Coherence score computed to validate topic quality
-  └── Manual inspection of 50-100 representative samples per topic
-
-STAGE 5 — Insight Generation
-  └── Top terms and representative reviews per topic → structured prompt
-  └── Gemini API generates plain-English product recommendations per theme
-
-STAGE 6 — Visual Analytics
-  └── Sentiment distribution bar chart
-  └── Word clouds per sentiment class
-  └── Topic term frequency plots
-  └── Sentiment trend over time (review date)
-```
-
-**Model choices:**
-- **TextBlob** for sentiment: lightweight, no fine-tuning required, sufficient signal for polarity classification at this scale
-- **LDA (k=5 per subset):** balances topic granularity vs. interpretability for a 100k-review corpus; k was validated via coherence scores
-- **Gemini API** for insight synthesis: translates raw topic clusters into structured product recommendations that can directly feed a PM or strategy workflow
-
-![Technical Pipeline](images/technical_pipeline.png)
-
----
-
-## 📊 Results & Key Findings
-
-### Sentiment Distribution
-
-![Sentiment Analysis & Top Themes](images/sentiment_analysis.png)
-
-| Sentiment | Review Count | Share |
-|---|---|---|
-| **Positive** | 69,274 | **69.3%** |
-| Neutral | 18,150 | 18.2% |
-| Negative | 12,576 | 12.6% |
-
-Overall sentiment skews strongly positive, but the 12.6% negative cohort (12,576 reviews) represents a concentrated signal — at Meesho's order volumes (~1.8B FY25), even small pain points affect millions of transactions.
-
-### Positive Themes (LDA)
-
-| Topic | Key Signal |
-|---|---|
-| Product & Value | Users repeatedly praise product selection and perceived value-for-money |
-| App Experience | App described as smooth, easy to navigate, and well-designed |
-| Service & Order Experience | Positive mentions of delivery execution and customer service responsiveness |
-| Trust & Repeat Usage | Many reviewers describe habitual usage and high platform trust |
-| Price & Speed | Price competitiveness and fast delivery are the most frequently co-mentioned attributes |
-
-### Negative Themes (LDA)
-
-| Topic | Key Signal |
-|---|---|
-| Returns & Trust Issues | Wrong items delivered, slow or failed refunds, occasional fraud reports |
-| Delivery & Fulfillment | Delivery delays and inconsistent last-mile handling |
-| App / Checkout Friction | App bugs, checkout errors, payment failures |
-| Counterfeit / Misleading Deals | "Fake" products and misleading promotional claims |
-| Regional Language Complaints | Non-English reviews flagging localised friction in language and CS support |
-
----
-
-## 🧠 Strategic Insights Applied
-
-The NLP output fed directly into a five-theme ICE-prioritised action plan for the Meesho case study:
-
-![Strategic Action Plan](images/strategic_action_plan.png)
-
-| Theme | Action | ICE Score | Priority |
-|---|---|---|---|
-| Returns & Trust Issues | Tighten seller verification, automate refunds, add Verified badge | 320 | High |
-| Delivery & Fulfillment | Pilot stricter SLAs with last-mile partners, real-time tracking | 288 | High |
-| App / Checkout Friction | Fix high-impact bugs, simplify checkout, 1-tap payment | 252 | Medium |
-| Counterfeit / Misleading Deals | Verified-listing program, rapid takedown for repeat offenders | 240 | Medium |
-| Regional Language Complaints | Localise UI and help content, route reviews to regional CS teams | 210 | Low |
-
-![ICE Prioritisation & Roadmap](images/ice_prioritisation.png)
-
-The case study also covers market sizing (TAM/SAM/SOM), competitive positioning vs. Flipkart/Amazon/reseller apps, user persona mapping (Value-Seeking Shopper, Emerging Urban Shopper, Micro-Entrepreneur Seller), full customer journey analysis, and a pilot → measure → scale roadmap.
-
----
-
-## 📁 Repository Structure
+## Repository structure
 
 ```
-App_Feedback_Analysis/
-│
-├── AI_App_Review_Insights.ipynb   # Full pipeline: scraping → preprocessing → sentiment → LDA → Gemini insights → visualisations
-├── images/
-│   ├── executive_summary.png      # Problem statement & Meesho KPIs
-│   ├── technical_pipeline.png     # End-to-end methodology & validation
-│   ├── sentiment_analysis.png     # Sentiment distribution + LDA themes
-│   ├── strategic_action_plan.png  # Five-theme action plan with metrics
-│   └── ice_prioritisation.png     # ICE scores + pilot → measure → scale roadmap
-├── requirements.txt               # Python dependencies
-└── README.md
+final_pipeline_V2.ipynb            The Blinkit case study's analysis pipeline (10 stages)
+final_pipeline_v2_architecture.html  Architecture diagram for the pipeline above
+Blinkit_Case_Study_2.pdf           16-slide case study deck (the pipeline's output)
+requirements_v2.txt                Dependencies for final_pipeline_V2.ipynb
+webapp/                            Generalized, self-serve version of the same methodology
+  app.py                             Gradio UI, job queue, keep-alive thread
+  theme.css                          Design system
+  requirements.txt                   Dependencies for the web app
+  review_diagnostics/                scrape / discover / measure / test / report modules
+render.yaml                        Render deployment blueprint for webapp/
+
+# Earlier project (see below)
+AI_App_Review_Insights.ipynb       V1: LDA + Gemini pipeline, Meesho case study
+meesho_case_study.pdf
+images/
+requirements.txt
 ```
 
----
+## Running it
 
-## 🚀 How to Run
+**The web app** (fully runnable — no external data needed, scrapes live):
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/aguru-venkata-saisantosh-patnaik/App_Feedback_Analysis.git
-   cd App_Feedback_Analysis
-   ```
-
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Download required NLTK data (first run only):
-   ```python
-   import nltk
-   nltk.download('stopwords')
-   nltk.download('punkt')
-   nltk.download('wordnet')
-   ```
-
-4. Set your Gemini API key — see [API Key Setup](#-api-key-setup) below.
-
-5. Open and run the notebook:
-   ```bash
-   jupyter notebook AI_App_Review_Insights.ipynb
-   ```
-
-6. Run all cells from top to bottom. The scraper fetches live data from the Play Store at runtime — full execution takes approximately **10–20 minutes** depending on connection speed and review count.
-
-> **Note:** A live internet connection is required for both the Play Store scraper and Gemini API calls.
-
----
-
-## 🔑 API Key Setup
-
-This project uses the **Gemini API** (Google AI Studio — free tier available) for insight generation.
-
-1. Get a free API key at [aistudio.google.com](https://aistudio.google.com)
-2. Create a `.env` file in the project root:
-   ```
-   GEMINI_API_KEY=your_api_key_here
-   ```
-3. The notebook loads it via:
-   ```python
-   import os
-   api_key = os.getenv("GEMINI_API_KEY")
-   ```
-
-Alternatively, paste your key directly into the config cell at the top of the notebook (not recommended for shared environments).
-
----
-
-## 📦 Dependencies
-
-```
-google-play-scraper   # Play Store review scraping
-pandas                # Data manipulation
-matplotlib            # Charting
-seaborn               # Statistical visualisation
-textblob              # Sentiment polarity scoring
-nltk                  # Tokenisation, stopwords, lemmatisation
-gensim                # LDA topic modelling
-wordcloud             # Word cloud visualisation
-requests              # Gemini API calls
-streamlit             # Optional: interactive dashboard
+```bash
+pip install -r webapp/requirements.txt
+python webapp/app.py
 ```
 
-All review data is fetched live at runtime — no local dataset file is required.
+Opens at `http://localhost:7860`.
 
----
+**The case study notebook** (reference — needs its own pre-processed input
+data, not included here):
 
-## ⚠️ Limitations & Caveats
+```bash
+pip install -r requirements_v2.txt
+jupyter notebook final_pipeline_V2.ipynb
+```
 
-- **No date filter** — the pipeline scrapes the latest 100k reviews, so findings reflect current user voice but are not tied to a fixed time window or product release
-- **TextBlob sentiment** — rule-based polarity scoring; may misclassify sarcasm or mixed-sentiment reviews. A fine-tuned model (e.g., IndicBERT) would improve accuracy on Hindi/regional reviews
-- **LDA topic stability** — topic assignments can vary slightly between runs due to random initialisation; coherence scores and manual inspection were used to validate stability
-- **English-only preprocessing** — stopword removal and lemmatisation are English-only; regional-language reviews are retained but not cleaned optimally
-- **Play Store only** — App Store (iOS) reviews are not included; sentiment distribution may differ across platforms
-- **Recency bias in scraping** — `google-play-scraper` retrieves the most recent reviews; older reviews and deleted reviews are not captured
+## Deploying the web app
 
----
+`webapp/` is host-agnostic and binds to `0.0.0.0:$PORT`. See
+[`render.yaml`](render.yaml) at the repo root for a ready-to-use Render
+Blueprint (`rootDir: ./webapp`).
 
-*Built to demonstrate how large-scale NLP can replace survey-based research for product and strategy teams — grounded in real user voice, not assumption.*
+## Earlier project (V1)
+
+This repo also contains an earlier, separate project: an LDA + Gemini
+review-insight pipeline applied to a Meesho case study —
+[`AI_App_Review_Insights.ipynb`](AI_App_Review_Insights.ipynb) and
+[`meesho_case_study.pdf`](meesho_case_study.pdf), with supporting visuals
+in [`images/`](images/) and its own [`requirements.txt`](requirements.txt).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
