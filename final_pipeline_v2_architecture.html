@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Blinkit Review Diagnostic Pipeline — Architecture v3</title>
+<style>
+:root{
+  --ink:#26303a; --ink-soft:#6b7682; --paper:#f8f9fb; --panel:#ffffff; --panel-2:#eef1f4; --line:#dde2e8; --line-soft:#e9ecf0;
+  --accent:#2f8f86; --accent-ink:#1c5a54; --accent-bg:#e1f2ef; --accent-line:#a9dad3;
+  --negative:#c25b3f; --negative-ink:#8a3c26; --negative-bg:#fbeae3; --negative-line:#eec3b2;
+  --neutral:#8a6fae; --neutral-ink:#5c4779; --neutral-bg:#f2edf9; --neutral-line:#d3c2e8;
+  --positive:#4a9166; --positive-ink:#2f6746; --positive-bg:#e9f5ec; --positive-line:#b8dcc4;
+  --guard:#22938c; --guard-ink:#155a55; --guard-bg:#e2f5f3; --guard-line:#a6ddd8;
+  --gate:#c99a2e; --gate-ink:#7a5c15; --gate-bg:#fdf4de; --gate-line:#eed99b;
+  --exit:#c15a82; --exit-ink:#7d3654; --exit-bg:#fbeaf1; --exit-line:#eabdd0;
+  --compute:#5c7b83; --compute-ink:#374b50; --compute-bg:#eaf1f2; --compute-line:#c3d5d8;
+  --robust:#4a7ea3; --robust-ink:#2c4d64; --robust-bg:#e9f1f8; --robust-line:#bcd7e8;
+  --font-head:"Avenir Next Condensed","Helvetica Neue Condensed","Arial Narrow",ui-sans-serif,system-ui,sans-serif;
+  --font-body:-apple-system,BlinkMacSystemFont,"Segoe UI",ui-sans-serif,system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+/* Deliberately single-theme: this diagram always renders light, regardless of system preference or viewer toggle. */
+:root[data-theme="dark"],
+:root[data-theme="light"]{
+  --ink:#26303a; --ink-soft:#6b7682; --paper:#f8f9fb; --panel:#ffffff; --panel-2:#eef1f4; --line:#dde2e8; --line-soft:#e9ecf0;
+  --accent:#2f8f86; --accent-ink:#1c5a54; --accent-bg:#e1f2ef; --accent-line:#a9dad3;
+  --negative:#c25b3f; --negative-ink:#8a3c26; --negative-bg:#fbeae3; --negative-line:#eec3b2;
+  --neutral:#8a6fae; --neutral-ink:#5c4779; --neutral-bg:#f2edf9; --neutral-line:#d3c2e8;
+  --positive:#4a9166; --positive-ink:#2f6746; --positive-bg:#e9f5ec; --positive-line:#b8dcc4;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-body);font-size:11.5px;color:var(--ink);background:var(--paper);padding:22px 16px 40px;max-width:1300px;margin:0 auto;line-height:1.42}
+
+h1{font-family:var(--font-head);text-align:center;font-size:22px;font-weight:700;letter-spacing:.3px;text-wrap:balance;color:var(--ink)}
+.subtitle{text-align:center;font-size:10.5px;color:var(--ink-soft);margin-top:5px;margin-bottom:4px}
+.vsn{text-align:center;font-size:9px;color:var(--ink-soft);opacity:.8;margin-bottom:16px;font-family:var(--font-mono)}
+
+.center{text-align:center}
+.arrow{text-align:center;color:var(--ink-soft);font-size:15px;margin:5px 0}
+
+.orch{text-align:center;margin-bottom:14px}
+.orch-pill{display:inline-block;background:var(--accent-bg);border:1px solid var(--accent-line);color:var(--accent-ink);padding:5px 18px;border-radius:3px;font-family:var(--font-head);font-size:10.5px;font-weight:700;letter-spacing:1.1px}
+.orch-sub{font-size:9.5px;color:var(--ink-soft);margin-top:6px;font-family:var(--font-mono)}
+
+.state-bar{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:4px;padding:10px 18px;margin-bottom:12px}
+.state-bar .t{font-family:var(--font-head);font-size:10.5px;font-weight:700;color:var(--accent-ink);letter-spacing:.8px;text-transform:uppercase}
+.state-bar .d{font-size:9.5px;color:var(--ink-soft);margin-top:5px;font-family:var(--font-mono);line-height:1.65}
+
+.chk{background:var(--gate-bg);border:1px solid var(--gate-line);border-radius:5px;padding:7px 14px;font-size:10px;font-weight:600;color:var(--gate-ink);margin-bottom:10px;text-align:center}
+.chk b{font-family:var(--font-mono)}
+.chk.exitc{background:var(--exit-bg);border-color:var(--exit-line);color:var(--exit-ink)}
+
+.sbox{border-radius:6px;overflow:hidden;margin-bottom:10px;border:1px solid var(--line)}
+.sbox .sh{padding:7px 15px;display:flex;justify-content:space-between;align-items:center;background:var(--panel-2);border-bottom:1px solid var(--line)}
+.sbox .sb{padding:12px 15px;background:var(--panel)}
+.stag{font-family:var(--font-head);font-size:10px;font-weight:700;color:var(--ink);letter-spacing:.7px;text-transform:uppercase}
+.mbadge{padding:2px 10px;border-radius:3px;font-size:9px;font-weight:600;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);font-family:var(--font-mono)}
+.no-ml{background:var(--positive-bg);color:var(--positive-ink);padding:2px 10px;border-radius:3px;font-size:9px;font-weight:700;border:1px solid var(--positive-line);font-family:var(--font-mono)}
+.aname{font-family:var(--font-head);font-size:13.5px;font-weight:700;margin-bottom:8px;letter-spacing:.2px;color:var(--ink)}
+
+.g{display:grid;grid-template-columns:32px 1fr;gap:4px 7px;font-size:9.5px;line-height:1.55}
+.g .l{font-weight:700;font-family:var(--font-mono);padding-top:1px;color:var(--ink-soft);font-size:8.5px}
+.g b{font-weight:700;color:var(--ink)}
+
+.note{margin-top:7px;background:var(--panel-2);border:1px dashed var(--line);border-radius:4px;padding:6px 9px;font-size:9px;line-height:1.55;color:var(--ink-soft)}
+
+.indep-box{border:1px solid var(--accent-line);background:var(--accent-bg);border-radius:6px;padding:9px 15px;margin-bottom:10px;text-align:center;font-size:9.5px;color:var(--accent-ink);line-height:1.55}
+.indep-box b{font-family:var(--font-mono)}
+
+.tri-head{text-align:center;font-family:var(--font-head);font-size:10px;font-weight:700;color:var(--ink-soft);letter-spacing:1px;margin-bottom:9px;text-transform:uppercase}
+
+.cols3{display:flex;gap:11px;margin-bottom:10px;align-items:flex-start}
+.col{flex:1;border-radius:9px;padding:10px;min-width:0}
+.ncolNeg{background:var(--negative-bg);border:1px solid var(--negative-line)}
+.ncolNeu{background:var(--neutral-bg);border:1px solid var(--neutral-line)}
+.ncolPos{background:var(--positive-bg);border:1px solid var(--positive-line)}
+.colh{text-align:center;font-family:var(--font-head);font-size:10.5px;font-weight:700;letter-spacing:.8px;margin-bottom:9px;text-transform:uppercase}
+
+.agent{border-radius:6px;overflow:hidden;margin-bottom:7px;border:1px solid}
+.agent .ah{padding:5px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid;flex-wrap:wrap;gap:3px}
+.agent .atag{font-family:var(--font-head);font-size:9px;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
+.agent .am{padding:1px 7px;border-radius:3px;font-size:7.5px;font-weight:600;font-family:var(--font-mono);background:var(--panel);border:1px solid var(--line)}
+.agent .ab{padding:8px 10px;background:var(--panel)}
+.agent .an{font-family:var(--font-head);font-size:12px;font-weight:700;margin-bottom:5px;color:var(--ink)}
+
+.qa{border-color:var(--negative-line)}
+.qa .ah{background:var(--negative-bg);color:var(--negative-ink);border-color:var(--negative-line)}
+.na{border-color:var(--neutral-line)}
+.na .ah{background:var(--neutral-bg);color:var(--neutral-ink);border-color:var(--neutral-line)}
+.ca{border-color:var(--positive-line)}
+.ca .ah{background:var(--positive-bg);color:var(--positive-ink);border-color:var(--positive-line)}
+
+.assa{border-color:var(--gate-line)}
+.assa .ah{background:var(--gate-bg);color:var(--gate-ink);border-color:var(--gate-line)}
+.assa .ab{background:#fffdf7}
+
+.guard{background:var(--guard-bg);border:1px solid var(--guard-line);border-radius:5px;padding:6px 10px;font-size:8.5px;color:var(--guard-ink);margin-bottom:7px;line-height:1.5}
+.guard .ht{font-family:var(--font-head);font-weight:700;color:var(--guard-ink);margin-bottom:3px;font-size:9.5px;letter-spacing:.3px;text-transform:uppercase}
+.guard b{font-family:var(--font-mono)}
+
+.join{text-align:center;margin:6px 0 10px}
+.join span{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);padding:5px 18px;border-radius:4px;font-family:var(--font-head);font-size:9.5px;font-weight:600;letter-spacing:.4px}
+
+.par-wrap{border:1px dashed var(--line);border-radius:9px;padding:12px;margin-bottom:12px}
+.par-head{text-align:center;font-family:var(--font-head);font-size:10px;font-weight:700;color:var(--ink-soft);letter-spacing:1px;margin-bottom:11px;padding-bottom:8px;border-bottom:1px solid var(--line-soft);text-transform:uppercase}
+.par-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:11px}
+
+.vbox{border-radius:7px;overflow:hidden;border:1px solid}
+.vbox .vh{padding:6px 11px;display:flex;flex-direction:column;gap:3px;border-bottom:1px solid}
+.vbox .vb{padding:9px 11px}
+.vbox .vtag{font-family:var(--font-head);font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+.vbox .vname{font-family:var(--font-head);font-size:12.5px;font-weight:700;margin-bottom:6px}
+.vbox .vm{font-size:8px;font-weight:600;padding:1px 7px;border-radius:3px;align-self:flex-start;font-family:var(--font-mono);background:var(--panel);border:1px solid var(--line)}
+.vg{display:grid;grid-template-columns:28px 1fr;gap:2px 6px;font-size:9px;line-height:1.5}
+.vg .l{font-weight:700;font-family:var(--font-mono);font-size:8.5px}
+
+.vbox.compute{border-color:var(--compute-line)}
+.vbox.compute .vh{background:var(--compute-bg);color:var(--compute-ink);border-color:var(--compute-line)}
+.vbox.compute .vname{color:var(--compute-ink)}
+.vbox.compute .vb{background:var(--panel)}
+.vbox.compute .vg .l{color:var(--compute-ink)}
+
+.vbox.robust{border-color:var(--robust-line)}
+.vbox.robust .vh{background:var(--robust-bg);color:var(--robust-ink);border-color:var(--robust-line)}
+.vbox.robust .vname{color:var(--robust-ink)}
+.vbox.robust .vb{background:var(--panel)}
+.vbox.robust .vg .l{color:var(--robust-ink)}
+
+.vbox.guardv{border-color:var(--guard-line)}
+.vbox.guardv .vh{background:var(--guard-bg);color:var(--guard-ink);border-color:var(--guard-line)}
+.vbox.guardv .vname{color:var(--guard-ink)}
+.vbox.guardv .vb{background:var(--panel)}
+.vbox.guardv .vg .l{color:var(--guard-ink)}
+
+.factor-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:8.5px}
+.factor-table th{background:var(--panel-2);color:var(--compute-ink);padding:3px 7px;text-align:left;font-size:7.8px;font-weight:600;font-family:var(--font-head);letter-spacing:.3px;text-transform:uppercase;border-bottom:1px solid var(--line)}
+.factor-table td{padding:3.5px 7px;border-bottom:1px solid var(--line-soft);vertical-align:top;line-height:1.5}
+.factor-table tr:last-child td{border-bottom:none}
+.factor-table .fw{font-weight:700;color:var(--compute-ink);white-space:nowrap;font-family:var(--font-head);font-size:8.5px}
+.factor-table .calc{font-family:var(--font-mono);font-size:8px;color:var(--ink)}
+.factor-table .noteC{font-style:italic;color:var(--ink-soft);font-size:8px}
+
+.runtime-note{background:var(--exit-bg);border:1px solid var(--exit-line);border-radius:5px;padding:7px 11px;font-size:9px;color:var(--exit-ink);margin-top:8px;line-height:1.55}
+.runtime-note b{font-family:var(--font-mono)}
+
+.scope-note{background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:7px 11px;font-size:9px;color:var(--ink-soft);margin-top:8px;line-height:1.55}
+.scope-note b{color:var(--ink);font-family:var(--font-mono)}
+
+.quarters-box{background:var(--panel);border:1px solid var(--gate-line);border-left:4px solid var(--gate);border-radius:4px;padding:10px 18px;margin-bottom:12px}
+.quarters-box .t{font-family:var(--font-head);font-size:10.5px;font-weight:700;color:var(--gate-ink);letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px}
+.qrow{display:grid;grid-template-columns:150px 1fr;gap:4px 12px;font-size:9.5px;line-height:1.6;margin-bottom:4px}
+.qrow:last-child{margin-bottom:0}
+.qrow .ql{font-family:var(--font-head);font-weight:700;color:var(--ink);letter-spacing:.2px;font-size:9px;text-transform:uppercase;padding-top:1px}
+.qrow .qv{color:var(--ink-soft)}
+.qrow .qv b{color:var(--ink);font-family:var(--font-mono)}
+
+.final{border-radius:6px;overflow:hidden;margin-bottom:12px;border:1.5px solid var(--accent-line)}
+.final .sh{background:var(--accent-bg);color:var(--accent-ink);border-bottom:1px solid var(--accent-line)}
+.final .stag{color:var(--accent-ink)}
+
+.zones{display:flex;gap:11px;margin-bottom:12px}
+.zone{flex:1;border-radius:7px;padding:11px;text-align:center;border:1px solid}
+.zn{font-family:var(--font-head);font-size:11.5px;font-weight:700;margin-bottom:4px;letter-spacing:.3px;text-transform:uppercase}
+.zr{font-size:9.5px;margin-bottom:5px;font-family:var(--font-mono)}
+.zd{font-size:9px;line-height:1.55}
+.zhi{background:var(--positive-bg);border-color:var(--positive-line)}
+.zhi .zn,.zhi .zr,.zhi .zd{color:var(--positive-ink)}
+.zmd{background:var(--gate-bg);border-color:var(--gate-line)}
+.zmd .zn,.zmd .zr,.zmd .zd{color:var(--gate-ink)}
+.zlo{background:var(--panel-2);border-color:var(--line)}
+.zlo .zn,.zlo .zr,.zlo .zd{color:var(--ink-soft)}
+
+.legend{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;font-size:9.5px;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.ld{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:middle;margin-right:4px;border:1px solid var(--line)}
+.legend span.item{color:var(--ink-soft)}
+</style>
+</head>
+<body>
+
+<h1>Blinkit Review Diagnostic Pipeline</h1>
+<div class="subtitle">Three independent rating-band discovery passes, one shared measurement stage, comparable across any two cohorts</div>
+<div class="vsn">v3 &middot; Negative / Neutral / Positive each fully discovered on their own terms &middot; no band merged into another, no double-counting</div>
+
+<div class="orch">
+  <span class="orch-pill">ORCHESTRATED AS A CONFIG-DRIVEN NOTEBOOK RUN</span>
+  <div class="orch-sub">no LangGraph / no agents &mdash; deterministic stages &middot; three independent discovery fits, one shared measurement stage &middot; Drive-checkpointed (load-bearing at this runtime, not optional)</div>
+</div>
+
+<div class="state-bar">
+  <div class="t">Run Config &mdash; set once per app, read by every stage</div>
+  <div class="d">app_package &middot; category_hypotheses[] (six/seven, Negative side only, defined before results) &middot; rating_bands {Negative: 1&ndash;2&#9733;, Neutral: 3&#9733;, Positive: 4&ndash;5&#9733; &mdash; strict, non-overlapping, no leakage across bands, no merging} &middot; discovery_window per band (bounded population &mdash; see Quarters box below for the exact dates in use) &middot; cohort_a / cohort_b (any two quarters or version groups, selected from the full measured set; this run uses two separate pairs, also in the Quarters box) &middot; clustering_params {Negative: min_cluster_size 0.5&ndash;2%, min_samples&le;150 &mdash; validated; Neutral &amp; Positive: own searches, not yet run} &middot; correction_tiers {bonferroni: pre-registered hypotheses, benjamini_hochberg: discovered extras} &mdash; Negative side only &middot; cache_dir (Google Drive, chunked &amp; resumable)</div>
+</div>
+
+<div class="quarters-box">
+  <div class="t">&#9670; Quarters used in this pipeline &mdash; three different things, kept deliberately separate</div>
+  <div class="qrow"><span class="ql">Discovery window</span><span class="qv">Feeds clustering only (Stage 3/3a/3b/4 and both variants) &mdash; <b>Q4 FY26 (Jan&ndash;Mar 2026) + Q1 FY27 (Apr&ndash;Jun 2026)</b>. Same window for Negative, Neutral, <em>and</em> Positive discovery. Never the slide-8 quarters below.</span></div>
+  <div class="qrow"><span class="ql">Primary diagnostic pair</span><span class="qv">Stage 7&rsquo;s headline test &mdash; <b>Q4 FY26 vs Q1 FY27</b>. Same two quarters as the discovery window, now used as the actual comparison. Matches Eternal&rsquo;s disclosed QoQ cost figures exactly (n=15,885 / 19,440, verified). Produces slides 6, 7, 11.</span></div>
+  <div class="qrow"><span class="ql">Slide-8 deep-dive pair</span><span class="qv">A second, separate invocation of Stage 7, run only inside Stage 9 &mdash; <b>Before = FY25 Q4 + FY26 Q1 pooled (Jan&ndash;Jun 2025)</b>, <b>After = FY27 Q1 alone (Apr&ndash;Jun 2026)</b>. Never used for discovery/clustering. Produces one supporting finding for slide 8 only, not the headline table.</span></div>
+</div>
+<div class="arrow">&darr;</div>
+
+<div class="chk">&#9670; PRE-PIPELINE CHECK &nbsp;&rarr;&nbsp; snippets file present? <b>review_id, snippet, rating, date, app_version</b> columns intact? row count &gt; 0?
+  <span style="color:var(--exit-ink)"> &nbsp;FAIL &rarr; abort before any compute spent</span>
+</div>
+<div class="arrow">&darr;</div>
+
+<!-- STAGE 1 -->
+<div class="sbox">
+  <div class="sh"><span class="stag">Shared &middot; Stage 1</span><span class="no-ml">no ML &middot; pandas only</span></div>
+  <div class="sb">
+    <div class="aname">Population Split</div>
+    <div class="g">
+      <span class="l">IN</span><span>full snippet table (797,770 snippets / 588,832 unique reviews, verified against source)</span>
+      <span class="l">DO</span><span>Dedupe to review level (rating/date/version are review-level, duplicated across snippets). Parse <b>date &rarr; Indian FY quarter</b> (Apr&ndash;Mar). Split into three <b>strict, non-overlapping</b> rating bands &mdash; Negative (1&ndash;2&#9733;), Neutral (3&#9733;), Positive (4&ndash;5&#9733;) &mdash; across <b>every</b> quarter in the dataset. Ratings are whole integers (verified: no fractional values), so every review counts in exactly one band &mdash; never split, never duplicated.</span>
+      <span class="l">OUT</span><span>reviews{Negative, Neutral, Positive} &times; {every quarter, 2020&ndash;2026} &mdash; full corpus retained; which cohort pairs get compared &mdash; there can be more than one, e.g. the primary diagnostic (Q4 FY26/Q1 FY27) and the separate slide-8 deep-dive pair &mdash; is a downstream selection (Stage 7/9), not a Stage 1 filter</span>
+    </div>
+  </div>
+</div>
+
+<div class="chk exitc">&#9670; CHECK: does each chosen cohort pair&rsquo;s population clear the sample floor in both cohorts? &nbsp;&rarr;&nbsp; FAIL &rarr; report rate descriptively, skip the significance test for that pair &middot; run separately for the primary pair and the slide-8 pair &middot; this is a coarse pre-check &mdash; Stage 7 applies a finer, per-category floor later</div>
+
+<div class="indep-box">
+  &#9670; <b>Independent by design</b> &mdash; all three discovery passes below run in parallel and do not depend on each other. Each is its own bounded population, its own clustering fit, its own auto-labeled category set. Negative doesn&rsquo;t need Positive to exist first, Neutral doesn&rsquo;t need either &mdash; "what people are unhappy about," "what's mixed," and "what people love" are three separate questions, each answered on its own terms.
+</div>
+
+<div class="tri-head">Three Independent Discovery Passes</div>
+
+<!-- THREE COLUMNS -->
+<div class="cols3">
+
+  <div class="col ncolNeg">
+    <div class="colh" style="color:var(--negative-ink)">Negative (1&ndash;2&#9733;)</div>
+
+    <div class="agent qa">
+      <div class="ah"><span class="atag">Stage 3a</span><span class="am">SentenceTransformer</span></div>
+      <div class="ab">
+        <div class="an">Embed + Reduce</div>
+        <div class="g">
+          <span class="l">IN</span><span>Negative snippets, discovery window = <b>Q4 FY26 + Q1 FY27</b> (see Quarters box above) &mdash; 52,664 snippets</span>
+          <span class="l">DO</span><span>all-MiniLM-L6-v2 &rarr; UMAP, 5 components, cosine. Fit once, cached. Strictly 1&ndash;2&#9733; text.</span>
+          <span class="l">OUT</span><span>reduced_embeddings &mdash; measured ~3.5 min on CPU at this size</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent qa">
+      <div class="ah"><span class="atag">Stage 3b</span><span class="am">HDBSCAN</span></div>
+      <div class="ab">
+        <div class="an">Cluster</div>
+        <div class="g">
+          <span class="l">IN</span><span>reduced_embeddings</span>
+          <span class="l">DO</span><span><b>min_cluster_size 0.5&ndash;2%</b> &middot; <b>min_samples&le;150</b> (200/300/500 OOM&rsquo;d 100% of the time on the 604K-point corpus). Yields 8&ndash;20 raw topics here, vs 2&ndash;4 on the full multi-year corpus.</span>
+          <span class="l">OUT</span><span>raw_cluster_labels</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="guard">
+      <div class="ht">&#9670; Category Integrity Guard</div>
+      Labels are never hand-assigned &mdash; Stage 4 derives them from c-TF-IDF terms, fresh each run. The only human step later is renaming an already-discovered label for deck readability, never reassigning which reviews belong to it.
+    </div>
+
+    <div class="agent assa">
+      <div class="ah"><span class="atag">Stage 4</span><span class="am">BERTopic</span></div>
+      <div class="ab">
+        <div class="an">Auto-Label &amp; Merge</div>
+        <div class="g">
+          <span class="l">DO</span><span>c-TF-IDF top terms per cluster &rarr; hierarchical reduction merges near-duplicates.</span>
+          <span class="l">OUT</span><span>category_definitions_negative{ id &rarr; {keywords[], centroid, examples[]} } &mdash; the six/seven hypothesis-mapped categories</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="chk" style="margin-bottom:0;font-size:9px">&#9670; Hypothesis coverage: does each pre-registered category have &ge;1 matching cluster? &rarr; no forced fallback, report as-is</div>
+  </div>
+
+  <div class="col ncolNeu">
+    <div class="colh" style="color:var(--neutral-ink)">Neutral (3&#9733;)</div>
+
+    <div class="agent na">
+      <div class="ah"><span class="atag">Stage 3a&Prime;</span><span class="am">own fit</span></div>
+      <div class="ab">
+        <div class="an">Embed + Reduce</div>
+        <div class="g">
+          <span class="l">IN</span><span>Neutral snippets, <b>same discovery window as Negative</b> (Q4 FY26 + Q1 FY27) &mdash; just the Neutral-band reviews within it, an independent population</span>
+          <span class="l">DO</span><span>Same embedder + UMAP mechanism, own fit. Not merged into either neighboring band.</span>
+          <span class="l">OUT</span><span>reduced_embeddings_neutral</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent na">
+      <div class="ah"><span class="atag">Stage 3b&Prime;</span><span class="am">own resolution</span></div>
+      <div class="ab">
+        <div class="an">Cluster</div>
+        <div class="g">
+          <span class="l">DO</span><span>Own grid search, not yet run &mdash; a much smaller, more mixed-signal population than Negative, likely needs its own resolution range entirely.</span>
+          <span class="l">OUT</span><span>raw_cluster_labels_neutral</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="guard">
+      <div class="ht">&#9670; Category Integrity Guard</div>
+      Same rule: labels derived only from that run&rsquo;s c-TF-IDF terms, never hand-picked.
+    </div>
+
+    <div class="agent assa">
+      <div class="ah"><span class="atag">Stage 4&Prime;</span><span class="am">BERTopic</span></div>
+      <div class="ab">
+        <div class="an">Auto-Label &amp; Merge</div>
+        <div class="g">
+          <span class="l">DO</span><span>Same c-TF-IDF + merge mechanism. <b>Exploratory only</b> &mdash; no pre-registered hypotheses, no significance testing.</span>
+          <span class="l">OUT</span><span>category_definitions_neutral{...} &mdash; standalone: what mixed-signal reviews are actually about (e.g. "good product, slow delivery")</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="chk" style="margin-bottom:0;font-size:9px">&#9670; Cluster quality: n_topics &ge; minimum, noise% below ceiling &rarr; else widen/narrow the resolution search</div>
+  </div>
+
+  <div class="col ncolPos">
+    <div class="colh" style="color:var(--positive-ink)">Positive (4&ndash;5&#9733;)</div>
+
+    <div class="agent ca">
+      <div class="ah"><span class="atag">Stage 3a&prime;</span><span class="am">own fit</span></div>
+      <div class="ab">
+        <div class="an">Embed + Reduce</div>
+        <div class="g">
+          <span class="l">IN</span><span>Positive snippets, <b>same discovery window as Negative</b> (Q4 FY26 + Q1 FY27) &mdash; just the Positive-band reviews within it, an independent population</span>
+          <span class="l">DO</span><span>Same embedder + UMAP mechanism, own fit. No shared embedding space with the other two.</span>
+          <span class="l">OUT</span><span>reduced_embeddings_positive</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent ca">
+      <div class="ah"><span class="atag">Stage 3b&prime;</span><span class="am">own resolution</span></div>
+      <div class="ab">
+        <div class="an">Cluster</div>
+        <div class="g">
+          <span class="l">DO</span><span>Own grid search, not yet run &mdash; likely more homogeneous ("fast, great app" repeats a lot) than Negative, so needs its own check before trusting a number here.</span>
+          <span class="l">OUT</span><span>raw_cluster_labels_positive</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="guard">
+      <div class="ht">&#9670; Category Integrity Guard</div>
+      Same rule: labels derived only from that run&rsquo;s c-TF-IDF terms, never hand-picked.
+    </div>
+
+    <div class="agent assa">
+      <div class="ah"><span class="atag">Stage 4&prime;</span><span class="am">BERTopic</span></div>
+      <div class="ab">
+        <div class="an">Auto-Label &amp; Merge</div>
+        <div class="g">
+          <span class="l">DO</span><span>Same c-TF-IDF + merge mechanism. <b>Exploratory only</b> &mdash; no pre-registered hypotheses, no significance testing.</span>
+          <span class="l">OUT</span><span>category_definitions_positive{...} &mdash; standalone: what people are actually praising, not just whether complaints echo here</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="chk" style="margin-bottom:0;font-size:9px">&#9670; Cluster quality: n_topics &ge; minimum, noise% below ceiling &rarr; else widen/narrow the resolution search</div>
+  </div>
+</div>
+
+<div class="join"><span>&larr; only category_definitions_negative continues into Stage 6 &rarr;</span></div>
+<div class="arrow">&darr;</div>
+
+<!-- STAGE 6 -->
+<div class="sbox">
+  <div class="sh"><span class="stag">Stage 6</span><span class="mbadge">cosine similarity, no clustering, version-blind</span></div>
+  <div class="sb">
+    <div class="aname">Generalized Measurement</div>
+    <div class="g">
+      <span class="l">IN</span><span>category_definitions_negative (the six/seven pre-registered categories &mdash; deliberately Negative&rsquo;s only, see scope note) + every review, every quarter, all three bands</span>
+      <span class="l">DO</span><span>Embed each review&rsquo;s text with the same model throughout, measure cosine similarity to each Negative category&rsquo;s centroid, assign above a threshold. No clustering runs here &mdash; it&rsquo;s a lookup against fixed definitions. <b>Version-blind</b>: every review is measured the same way regardless of <code>app_version</code>; that column just rides along on the output row for Stage 8 to use later. This is what makes "compare any two quarters" possible without re-running discovery, and lets a marketplace-era (pre-1P) baseline quarter join a comparison as just another measured population.</span>
+      <span class="l">OUT</span><span>review &times; category boolean/similarity table, every quarter, every band, for the Negative category set &mdash; the one table Stages 7&ndash;10 all read from</span>
+    </div>
+    <div class="scope-note">
+      <b>Why only Negative&rsquo;s categories:</b> these are the only ones with pre-registered hypotheses and P&amp;L mapping that need tracking across every band and quarter (e.g. "does wastage linger even among happy reviewers"). Neutral&rsquo;s and Positive&rsquo;s own discovered categories (Stage 4&Prime;, Stage 4&prime;) are standalone descriptive output &mdash; they go straight into the deck as their own "what people are saying" content, and don&rsquo;t feed back into this measurement or into Stage 7&rsquo;s testing.
+    </div>
+    <div class="runtime-note">
+      <b>Operating-model caveat</b> (relevant to the slide-8 Before cohort specifically, see Quarters box): categories discovered post-1P may not transfer cleanly across the marketplace &rarr; 1P boundary (Sept 2025) &mdash; a low match rate on an older quarter may mean vocabulary shifted, not that complaints were rare then.<br/><br/>
+      <b>Runtime:</b> this stage touches ~745K of the 797K total snippets (everything outside the Negative discovery window). Measured embedding rate: ~32 min alone on CPU &mdash; this is the single largest chunk. Negative discovery is empirically confirmed at ~3.5 min (see Stage 3a). Neutral and Positive discovery haven&rsquo;t been run yet &mdash; budget roughly 3&ndash;8 min each pending their own resolution searches, same bounded-window approach as Negative. <b>Total pipeline, revised for three discovery passes: roughly 45&ndash;65 min</b> &mdash; likely comfortable under Colab free tier&rsquo;s session ceiling, but chunked Drive-checkpointing stays load-bearing until Neutral/Positive&rsquo;s real timing is confirmed.
+    </div>
+  </div>
+</div>
+<div class="arrow">&darr;</div>
+
+<!-- PARALLEL VALIDATION -->
+<div class="par-wrap">
+  <div class="par-head">&#8741; Stages 7, 8, 9 &mdash; run in parallel, all read Stage 6&rsquo;s measurement table</div>
+  <div class="par-grid">
+
+    <div class="vbox compute">
+      <div class="vh"><span class="vtag">Stage 7</span><span class="vm">no ML &middot; statsmodels/scipy</span></div>
+      <div class="vb">
+        <div class="vname">Stats Engine</div>
+        <div class="vg">
+          <span class="l">IN</span><span>Negative-band rows of Stage 6&rsquo;s table, for whichever cohort pair is being tested</span>
+          <span class="l">DO</span><span>Two-proportion z-test + Cohen&rsquo;s h per category. <b>Sole source of truth for every ranked/tested claim in the deck.</b></span>
+          <span class="l">OUT</span><span>{category, rate_a, rate_b, RR, cohens_h, p, tier}</span>
+        </div>
+        <table class="factor-table">
+          <tr><th>Check</th><th>Rule</th><th>Effect</th></tr>
+          <tr><td class="fw">Sample floor</td><td class="calc">n&middot;p&#770; &ge; 5 both cohorts, else n &ge; 30&ndash;50</td><td class="noteC">below floor &rarr; rate reported, no p-value claimed</td></tr>
+          <tr><td class="fw">Correction &mdash; pre-registered</td><td class="calc">Bonferroni, &alpha;/6</td><td class="noteC">the six/seven hypothesized categories</td></tr>
+          <tr><td class="fw">Correction &mdash; exploratory</td><td class="calc">Benjamini&ndash;Hochberg (FDR)</td><td class="noteC">any extra category the clustering discovered</td></tr>
+        </table>
+        <div class="note" style="margin-top:7px">One engine, invoked twice: the <b>primary pair</b> (Q4 FY26 / Q1 FY27) produces the headline table; Stage 9 re-invokes this exact same engine on a <b>second, different cohort pair</b> for the slide-8 deep dive &mdash; not a separate implementation.</div>
+      </div>
+    </div>
+
+    <div class="vbox robust">
+      <div class="vh"><span class="vtag">Stage 8</span><span class="vm">groupby, no ML</span></div>
+      <div class="vb">
+        <div class="vname">Version-Mix Robustness</div>
+        <div class="vg">
+          <span class="l">IN</span><span>Stage 6&rsquo;s already-measured table (category + app_version columns) + <b>version_groups_summary.csv</b> (already computed, reused as-is)</span>
+          <span class="l">DO</span><span>Pure groupby/reweighting on data Stage 6 already produced &mdash; no embedding, no clustering, no new model call. Does a significant category&rsquo;s rate movement survive conditioning on a stable version mix across the two cohorts?</span>
+          <span class="l">OUT</span><span>robustness_flag per significant category &mdash; rules out "a UI change did this, not an operational issue"</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="vbox guardv">
+      <div class="vh"><span class="vtag">Stage 9</span><span class="vm">crosstab, no ML</span></div>
+      <div class="vb">
+        <div class="vname">Co-occurrence &amp; Deep Dives</div>
+        <div class="vg">
+          <span class="l">IN</span><span>Stage 6&rsquo;s full table, any bands / cohorts needed</span>
+          <span class="l">DO</span><span><b>Customer-care root cause:</b> of reviews tagged "customer care," what share also carry "wastage" or "late delivery"? Falls out of the table directly, no new computation.<br/><br/>
+          <b>Pre/post-1P wastage deep dive (slide 8):</b> tags wastage-category reviews perishable / non-perishable using the sourced 1P-category keyword list, then re-invokes <b>Stage 7&rsquo;s exact engine</b> (z-test + Cohen&rsquo;s h + sample floor). <b>Scope not yet fixed</b> &mdash; whether to test just the perishable-tagged subset or wastage overall is an open call, to be made once discovery output is actually visible, not decided in advance. Cohorts: <b>Before = FY25 Q4 + FY26 Q1 pooled (Jan&ndash;Jun 2025)</b>, safely before the Sept 2025 transition started &middot; <b>After = FY27 Q1 alone (Apr&ndash;Jun 2026)</b>, kept single-quarter deliberately so it doesn&rsquo;t merge the two quarters the headline diagnostic already treats as separate points. No new clustering &mdash; both cohorts already exist in Stage 6&rsquo;s table.</span>
+          <span class="l">OUT</span><span>co-occurrence matrix + pre/post-1P wastage result (scope TBD, see above), tested with the same rigor as the headline table, for slides 8&ndash;9</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="arrow">&darr;</div>
+
+<!-- FINAL -->
+<div class="sbox final">
+  <div class="sh"><span class="stag">Stage 10</span><span class="no-ml" style="background:var(--panel);color:var(--accent-ink)">no ML &middot; rule-based</span></div>
+  <div class="sb">
+    <div class="aname" style="color:var(--accent-ink)">Ranked Diagnostic Assembly</div>
+    <div class="g">
+      <span class="l">IN</span><span>Stage 7 (both invocations) + Stage 8 robustness + Stage 9 co-occurrence &amp; perishable tagging + Stage 6 (Neutral/Positive rates) + Stage 4&Prime;/4&prime; theme lists</span>
+      <span class="l">DO</span><span>Doesn&rsquo;t produce one output &mdash; assembles several, each from a different set of upstream stages and a different quarter window, routed to different slides. Always succeeds &mdash; deterministic, no model call.</span>
+    </div>
+    <table class="factor-table">
+      <tr><th>Assembled output</th><th>Sources</th><th>Window</th><th>Feeds</th></tr>
+      <tr>
+        <td class="fw">Ranked diagnostic table</td>
+        <td class="calc">Stage 7 (primary) + Stage 8 + Stage 6 (Neutral/Positive rates, <em>same</em> two quarters)</td>
+        <td class="calc">Q4 FY26 vs Q1 FY27</td>
+        <td class="noteC">Slides 6, 7, 11</td>
+      </tr>
+      <tr>
+        <td class="fw">Pre/post-1P wastage finding</td>
+        <td class="calc">Stage 7 (slide-8 invocation) + Stage 9 perishable tagging</td>
+        <td class="calc">Before: FY25 Q4+FY26 Q1 &middot; After: FY27 Q1</td>
+        <td class="noteC">Slide 8 only</td>
+      </tr>
+      <tr>
+        <td class="fw">Customer-care co-occurrence</td>
+        <td class="calc">Stage 9 crosstab</td>
+        <td class="calc">Whichever cohort it&rsquo;s attached to</td>
+        <td class="noteC">Slide 9</td>
+      </tr>
+      <tr>
+        <td class="fw">Neutral theme list</td>
+        <td class="calc">Stage 4&Prime; directly, no further processing</td>
+        <td class="calc">Discovery window (Q4 FY26+Q1 FY27)</td>
+        <td class="noteC">Slide TBD &mdash; no dedicated slide in the current 14-slide outline</td>
+      </tr>
+      <tr>
+        <td class="fw">Positive theme list</td>
+        <td class="calc">Stage 4&prime; directly, no further processing</td>
+        <td class="calc">Discovery window (Q4 FY26+Q1 FY27)</td>
+        <td class="noteC">Slide TBD &mdash; same open question</td>
+      </tr>
+    </table>
+    <div class="note" style="margin-top:7px">The last two rows are a real gap, not an oversight papered over: the original outline never allocated a slide for "what people are actually praising" or "what neutral reviews are about." Needs a decision &mdash; a new slide/section, folded briefly into the Executive Summary and Appendix, or kept as an internal sanity-check artifact not shown in the deck at all.</div>
+  </div>
+</div>
+<div class="arrow" style="margin-bottom:10px">&darr;</div>
+
+<div class="zones">
+  <div class="zone zhi">
+    <div class="zn">Priority</div>
+    <div class="zr">significant &middot; passes floor &middot; robust to version mix</div>
+    <div class="zd">Ranked by Cohen&rsquo;s h &middot; tied to a P&amp;L line &middot; goes into Recommendations first</div>
+  </div>
+  <div class="zone zmd">
+    <div class="zn">Watch</div>
+    <div class="zr">significant, but fails robustness or borderline on correction</div>
+    <div class="zd">Named explicitly, not silently dropped &middot; flagged for the next quarterly run</div>
+  </div>
+  <div class="zone zlo">
+    <div class="zn">No Action</div>
+    <div class="zr">not significant after correction</div>
+    <div class="zd">Explicitly ruled out &mdash; this is what makes it a prioritization tool, not six equally-weighted suspects</div>
+  </div>
+</div>
+
+<div class="legend">
+  <span class="item"><span class="ld" style="background:var(--negative-bg);border-color:var(--negative-line)"></span>Negative discovery (1&ndash;2&#9733;)</span>
+  <span class="item"><span class="ld" style="background:var(--neutral-bg);border-color:var(--neutral-line)"></span>Neutral discovery (3&#9733;)</span>
+  <span class="item"><span class="ld" style="background:var(--positive-bg);border-color:var(--positive-line)"></span>Positive discovery (4&ndash;5&#9733;)</span>
+  <span class="item"><span class="ld" style="background:var(--gate-bg);border-color:var(--gate-line)"></span>Assess / check nodes</span>
+  <span class="item"><span class="ld" style="background:var(--guard-bg);border-color:var(--guard-line)"></span>&#9670; Category Integrity Guard</span>
+  <span class="item"><span class="ld" style="background:var(--exit-bg);border-color:var(--exit-line)"></span>Sample-floor / runtime caveat</span>
+  <span class="item"><span class="ld" style="background:var(--compute-bg);border-color:var(--compute-line)"></span>Stats engine (no ML)</span>
+  <span class="item"><span class="ld" style="background:var(--robust-bg);border-color:var(--robust-line)"></span>Robustness check</span>
+  <span class="item"><b>&#8741;</b> = independent stages, run in parallel</span>
+</div>
+
+</body>
+</html>
