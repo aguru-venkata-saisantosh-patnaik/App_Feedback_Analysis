@@ -6,8 +6,10 @@ before the result rendered, reproducibly across fresh tabs and sessions.
 Plain JSON request/response over normal HTTP sidesteps that layer
 entirely. Routes <=INSTANT_MAX_REVIEWS reviews to a synchronous response;
 more to a background job delivered by email. Owns the single-worker job
-queue and the keep-alive self-ping meant to stop a free host from
-sleeping mid-job (residual risk: this reduces but doesn't eliminate it)."""
+queue and a keep-alive self-ping, running for the life of the process
+(not just during a job), that stops a free host from spinning the app
+down on idle -- trades a small steady trickle of self-traffic for no
+cold-start wait on the next real visitor."""
 
 import html
 import os
@@ -70,17 +72,18 @@ def _space_url() -> Optional[str]:
 
 
 def _keepalive_loop():
+    """Runs for the life of the process, not just while a job is active --
+    self-pings on a fixed interval so the free-tier host never sees the app
+    go idle long enough to spin it down, trading a small steady trickle of
+    self-traffic for no cold-start wait on the next real visitor."""
     url = _space_url()
+    if not url:
+        return
     while True:
-        with _active_jobs_lock:
-            still_active = _active_jobs > 0
-        if not still_active:
-            return
-        if url:
-            try:
-                requests.get(url, timeout=10)
-            except Exception:
-                pass
+        try:
+            requests.get(url, timeout=10)
+        except Exception:
+            pass
         time.sleep(KEEPALIVE_INTERVAL_SECONDS)
 
 
@@ -216,7 +219,6 @@ def api_run(req: RunRequest):
     except Exception:
         pass  # best-effort; the job still runs and the report email is what matters most
 
-    _ensure_keepalive_running()
     _executor.submit(_run_async_job, package_id, review_count, email_addr)
 
     return JSONResponse({
@@ -288,6 +290,7 @@ def _prewarm_nltk_data():
 if __name__ == "__main__":
     _prewarm_embedding_model()
     _prewarm_nltk_data()
+    _ensure_keepalive_running()
     # 0.0.0.0 (not localhost) so the container's external load balancer --
     # Render's, or a similar host's -- can actually reach it; PORT is
     # Render's own env var for which port it expects the app to listen on.
