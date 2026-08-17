@@ -1,4 +1,4 @@
-"""Sends emails via SendGrid's HTTPS API: a "your run has started" notice at
+"""Sends emails via Brevo's HTTPS API: a "your run has started" notice at
 job kickoff, a failure notice on crash, and the finished report. The started/
 failure notices matter as much as the report itself -- the async path has
 no UI left watching it once the user closes the tab, so a missing
@@ -10,12 +10,12 @@ hang until timeout with no response at all, the signature of a firewall
 silently dropping the traffic rather than rejecting it -- a common,
 deliberate anti-spam policy on free-tier PaaS hosts). Outbound HTTPS
 (443) isn't blocked -- it's how the app already talks to the Play Store.
-SendGrid instead of Resend: Resend's shared free-tier sender can only
-deliver to the account owner's own address unless a full custom domain
-is verified; SendGrid's free tier supports Single Sender Verification --
-proving ownership of one plain email address (a confirmation link, no
-DNS records) -- after which it can send to any recipient. Needs
-SENDGRID_API_KEY and SENDGRID_FROM_ADDRESS (the verified sender)."""
+Brevo instead of Resend/SendGrid: a genuinely permanent free tier (not a
+time-limited trial), with the same low-friction Single Sender
+Verification model -- proving ownership of one plain email address via a
+confirmation link, no DNS/domain needed -- after which it can send to any
+recipient. Needs BREVO_API_KEY and BREVO_FROM_ADDRESS (the verified
+sender)."""
 
 import base64
 import os
@@ -24,36 +24,31 @@ import requests
 
 from .report import ReportData
 
-SENDGRID_API_URL = "https://api.sendgrid.com/v3/mail/send"
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
 
 def _send(to_email: str, subject: str, html: str, attachment: tuple[str, bytes] | None = None) -> None:
-    api_key = os.environ["SENDGRID_API_KEY"]
-    from_address = os.environ["SENDGRID_FROM_ADDRESS"]
+    api_key = os.environ["BREVO_API_KEY"]
+    from_address = os.environ["BREVO_FROM_ADDRESS"]
 
     payload = {
-        "personalizations": [{"to": [{"email": to_email}]}],
-        "from": {"email": from_address, "name": "Review Diagnostic"},
+        "sender": {"name": "Review Diagnostic", "email": from_address},
+        "to": [{"email": to_email}],
         "subject": subject,
-        "content": [{"type": "text/html", "value": html}],
+        "htmlContent": html,
     }
     if attachment:
         filename, content = attachment
-        payload["attachments"] = [{
-            "content": base64.b64encode(content).decode("ascii"),
-            "filename": filename,
-            "type": "text/csv",
-            "disposition": "attachment",
-        }]
+        payload["attachment"] = [{"content": base64.b64encode(content).decode("ascii"), "name": filename}]
 
     resp = requests.post(
-        SENDGRID_API_URL,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        BREVO_API_URL,
+        headers={"api-key": api_key, "Content-Type": "application/json", "Accept": "application/json"},
         json=payload,
         timeout=20,
     )
     if resp.status_code >= 300:
-        raise RuntimeError(f"SendGrid returned {resp.status_code}: {resp.text[:500]}")
+        raise RuntimeError(f"Brevo returned {resp.status_code}: {resp.text[:500]}")
 
 
 def send_started_notice(to_email: str, app_title: str, eta_minutes: int) -> None:
