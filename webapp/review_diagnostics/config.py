@@ -71,6 +71,3 @@ MIN_MEMBERS_FOR_CALIBRATION = 30
 SAMPLE_FLOOR_MIN_N = 15   # lower than the Blinkit run's 30: small-sample demo runs need a lower floor
 ALPHA = 0.05
 MIN_VERSION_COVERAGE = 0.5
-
-# --- Email ---
-RESEND_FROM_ADDRESS = "Review Diagnostic <onboarding@resend.dev>"

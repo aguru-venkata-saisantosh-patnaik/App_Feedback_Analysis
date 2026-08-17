@@ -101,7 +101,7 @@ lists, no Blinkit-specific dates.
 - Paste a package ID and pick how many reviews to analyze.
 - **Up to 200 reviews**: instant, rendered in-browser.
 - **201–1,000 reviews**: queued as a background job, results emailed
-  (via [Resend](https://resend.com)) since the run is too slow to wait on.
+  (via Gmail's SMTP relay) since the run is too slow to wait on.
 - Reviews are auto-split into two cohorts by recency (most recent half vs.
   prior half); categories are discovered directly from review text, and
   each category's share of the Negative band is compared across cohorts
