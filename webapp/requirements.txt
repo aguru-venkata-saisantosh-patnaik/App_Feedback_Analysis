@@ -1,4 +1,6 @@
-gradio==6.23.1
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.0
 google-play-scraper>=1.2.6
 pandas>=2.0
 numpy>=1.24

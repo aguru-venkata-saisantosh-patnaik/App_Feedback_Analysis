@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Review Diagnostic</title>
+<link rel="stylesheet" href="/static/theme.css" />
+<style>
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  .gradio-container { padding-top: 24px; padding-bottom: 40px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 2px rgba(32,31,28,0.04);
+    padding: 18px 20px;
+  }
+  .lookup-row { display: flex; gap: 10px; align-items: flex-start; }
+  .lookup-row .field { flex: 4; }
+  .lookup-row .field-label { color: var(--text-muted); font-size: 12.5px; font-weight: 500; margin-bottom: 6px; }
+  #app-input-box textarea {
+    width: 100%; box-sizing: border-box; min-height: 46px; padding: 10px 12px;
+    font-size: 14px; resize: vertical; font-family: var(--font-sans);
+  }
+  button#lookup-btn, button#run-btn {
+    flex: 1; padding: 0 20px; height: 46px; border: none; cursor: pointer; font-size: 14px;
+  }
+  #run-group { margin-top: 4px; }
+  #run-group .field-label { color: var(--text-muted); font-size: 12.5px; font-weight: 500; margin-bottom: 8px; }
+  .slider-row { display: flex; align-items: center; gap: 14px; }
+  #review-count { flex: 1; }
+  #review-count-num {
+    width: 72px; padding: 7px 8px; text-align: center; font-size: 14px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  }
+  #email-wrap { margin-top: 14px; }
+  #email-wrap input {
+    width: 100%; box-sizing: border-box; padding: 10px 12px; font-size: 14px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  }
+  #run-btn { margin-top: 16px; width: 100%; }
+  #status-box { margin-top: 14px; font-size: 13.5px; line-height: 1.5; color: var(--text); }
+  #status-box.error { color: var(--danger); }
+  #download-file { margin: 16px 0; max-width: 360px; }
+  .download-link {
+    display: inline-flex; align-items: center; gap: 6px; background: var(--accent);
+    color: #FFFFFF; font-family: var(--font-sans); font-size: 12px; font-weight: 600;
+    padding: 8px 16px; border-radius: var(--radius-sm); text-decoration: none;
+  }
+  .download-link:hover { background: var(--accent-hover); }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border-strong);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite;
+    vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="gradio-container">
+
+  <div id="app-header">
+    <div class="header-row">
+      <svg class="header-mark" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0.5" y="0.5" width="31" height="31" rx="9" style="fill:var(--accent)"/>
+        <rect x="8" y="17" width="4" height="8" rx="1.2" style="fill:#FFFFFF"/>
+        <rect x="14" y="12" width="4" height="13" rx="1.2" style="fill:#FFFFFF"/>
+        <rect x="20" y="7" width="4" height="18" rx="1.2" style="fill:#FFFFFF"/>
+      </svg>
+      <h1 class="header-title">Review Diagnostic</h1>
+    </div>
+    <p>Paste a Play Store app and see what's actually driving negative reviews, and whether it's gotten better or worse lately.</p>
+  </div>
+
+  <div class="step-label"><span class="step-num">1</span>Find your app</div>
+  <div class="card lookup-row">
+    <div class="field" id="app-input-box">
+      <div class="field-label">Play Store URL or package ID</div>
+      <textarea id="app-input" rows="1" placeholder="com.example.app or a Play Store link"></textarea>
+    </div>
+    <button id="lookup-btn">Look up app</button>
+  </div>
+
+  <div id="app-card"></div>
+
+  <div id="step2-label" class="step-label hidden"><span class="step-num">2</span>Configure &amp; run</div>
+  <div id="run-group" class="card hidden">
+    <div class="field-label" id="review-count-label">How many reviews to analyze</div>
+    <div class="slider-row">
+      <input type="range" id="review-count" min="100" max="1000" step="10" value="150" />
+      <input type="number" id="review-count-num" min="100" max="1000" step="10" value="150" />
+    </div>
+    <div id="email-wrap" class="hidden">
+      <div class="field-label">Email (required for more than this many reviews)</div>
+      <input type="email" id="email" placeholder="you@example.com" />
+    </div>
+    <button id="run-btn">Run diagnostic</button>
+  </div>
+
+  <div id="status-box"></div>
+  <div id="download-file" class="hidden"></div>
+  <div id="report-html"></div>
+
+  <div id="footnote">
+    <p>Nothing is stored -- each run is stateless. Reviews are read in English, India store only.</p>
+  </div>
+
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>
