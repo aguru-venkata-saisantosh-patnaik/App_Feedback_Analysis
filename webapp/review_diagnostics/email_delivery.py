@@ -17,6 +17,7 @@ enabled first."""
 
 import os
 import smtplib
+import socket
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -24,7 +25,23 @@ from email.mime.text import MIMEText
 from .report import ReportData
 
 GMAIL_SMTP_HOST = "smtp.gmail.com"
-GMAIL_SMTP_PORT = 587
+# Tried in order: STARTTLS on 587 first, then implicit-TLS on 465 -- a live
+# failure ("Network is unreachable") on 587 turned out to be specific to
+# that port/mode on the host, not Gmail or the credentials, so this tries
+# both rather than hard-coding one.
+GMAIL_SMTP_PORTS = [(587, False), (465, True)]
+
+_orig_getaddrinfo = socket.getaddrinfo
+
+
+def _ipv4_only_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    """Some container hosts advertise an IPv6 route that isn't actually
+    usable, and getaddrinfo() returning an AAAA record first (with no
+    automatic fallback) surfaces as ENETUNREACH before IPv4 is ever tried.
+    Forcing AF_INET here -- only for the duration of the SMTP connection
+    attempt -- sidesteps that without needing to know in advance whether
+    it's actually the cause."""
+    return _orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
 
 
 def _send(to_email: str, subject: str, html: str, attachment: tuple[str, bytes] | None = None) -> None:
@@ -43,10 +60,23 @@ def _send(to_email: str, subject: str, html: str, attachment: tuple[str, bytes] 
         part["Content-Disposition"] = f'attachment; filename="{filename}"'
         msg.attach(part)
 
-    with smtplib.SMTP(GMAIL_SMTP_HOST, GMAIL_SMTP_PORT, timeout=20) as server:
-        server.starttls()
-        server.login(gmail_address, gmail_app_password)
-        server.sendmail(gmail_address, [to_email], msg.as_string())
+    last_err: Exception | None = None
+    for port, implicit_tls in GMAIL_SMTP_PORTS:
+        socket.getaddrinfo = _ipv4_only_getaddrinfo
+        try:
+            cls = smtplib.SMTP_SSL if implicit_tls else smtplib.SMTP
+            with cls(GMAIL_SMTP_HOST, port, timeout=20) as server:
+                if not implicit_tls:
+                    server.starttls()
+                server.login(gmail_address, gmail_app_password)
+                server.sendmail(gmail_address, [to_email], msg.as_string())
+            return
+        except Exception as e:
+            last_err = e
+            continue
+        finally:
+            socket.getaddrinfo = _orig_getaddrinfo
+    raise last_err
 
 
 def send_started_notice(to_email: str, app_title: str, eta_minutes: int) -> None:
