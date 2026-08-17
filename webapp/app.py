@@ -288,8 +288,28 @@ def _prewarm_embedding_model():
     print("Embedding model ready.", flush=True)
 
 
+def _prewarm_nltk_data():
+    """Same reasoning as _prewarm_embedding_model(): snippets.py lazily
+    calls nltk.download() on first use, against yet another external host
+    (nltk's own download server, separate from Play Store and Hugging Face)
+    -- a live test on this host hung silently for minutes with no crash and
+    no error at exactly this step before this fix, the same failure mode as
+    the two earlier unbounded-network-call bugs. Downloading at boot makes
+    a stall visible in deploy logs instead of hanging a user's request."""
+    import nltk
+
+    for pkg in ("punkt", "punkt_tab"):
+        try:
+            nltk.data.find(f"tokenizers/{pkg}")
+        except LookupError:
+            print(f"Pre-warming NLTK data: {pkg}...", flush=True)
+            nltk.download(pkg)
+    print("NLTK data ready.", flush=True)
+
+
 if __name__ == "__main__":
     _prewarm_embedding_model()
+    _prewarm_nltk_data()
     # 0.0.0.0 (not Gradio's 127.0.0.1 default) so the container's external
     # load balancer -- Render's, or a similar host's -- can actually reach
     # it; PORT is Render's own env var for which port it expects the app to
