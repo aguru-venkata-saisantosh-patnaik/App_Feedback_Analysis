@@ -216,8 +216,10 @@ def api_run(req: RunRequest):
     eta_minutes = max(2, review_count // 150)
     try:
         email_delivery.send_started_notice(email_addr, package_id, eta_minutes)
-    except Exception:
-        pass  # best-effort; the job still runs and the report email is what matters most
+        print(f"[email] started-notice sent to {email_addr}", flush=True)
+    except Exception as e:
+        print(f"[email] started-notice FAILED for {email_addr}: {e}", flush=True)
+        # best-effort; the job still runs and the report email is what matters most
 
     _executor.submit(_run_async_job, package_id, review_count, email_addr)
 
@@ -233,11 +235,14 @@ def _run_async_job(package_id: str, review_count: int, email_addr: str):
     try:
         data = pipeline.run(package_id, review_count)
         email_delivery.send_report(email_addr, data)
+        print(f"[email] report sent to {email_addr}", flush=True)
     except Exception as e:
+        print(f"[email] job/report FAILED for {email_addr}: {e}", flush=True)
         try:
             email_delivery.send_failure_notice(email_addr, package_id, str(e))
-        except Exception:
-            pass
+            print(f"[email] failure-notice sent to {email_addr}", flush=True)
+        except Exception as e2:
+            print(f"[email] failure-notice ALSO FAILED for {email_addr}: {e2}", flush=True)
     finally:
         with _active_jobs_lock:
             _active_jobs -= 1
