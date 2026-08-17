@@ -158,13 +158,18 @@ def run_diagnostic(package_id, review_count, email_addr):
     review_count = int(review_count)
 
     if review_count <= config.INSTANT_MAX_REVIEWS:
+        print(f"[app] run_diagnostic starting for {package_id}, {review_count} reviews", flush=True)
         try:
             data = pipeline.run(package_id, review_count)
         except Exception as e:
+            print(f"[app] pipeline.run raised: {e}", flush=True)
             return f"Run failed: {e}", "", gr.update(visible=False)
+        print("[app] pipeline.run returned, building response", flush=True)
         if data.insufficient_data or data.ranked_table.empty:
+            print("[app] returning insufficient-data response", flush=True)
             return "", data.to_html_report(), gr.update(visible=False)
         csv_path = _write_temp_csv(data, package_id)
+        print("[app] returning full report response", flush=True)
         return "", data.to_html_report(), gr.update(value=csv_path, visible=True)
 
     email_addr = (email_addr or "").strip()

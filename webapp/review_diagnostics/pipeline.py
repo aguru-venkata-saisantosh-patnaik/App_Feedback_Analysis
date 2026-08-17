@@ -67,9 +67,13 @@ def run(app_input: str, review_count: int) -> report.ReportData:
             f"{config.MIN_VIABLE_REVIEWS}) for a reliable comparison.",
         )
 
+    print("[pipeline] cleaning text...", flush=True)
     df_reviews["clean_review"] = df_reviews["content"].apply(scrape.clean_text)
+    print("[pipeline] parsing dates...", flush=True)
     df_reviews["date_parsed"] = pd.to_datetime(df_reviews["at"], errors="coerce")
+    print("[pipeline] assigning bands...", flush=True)
     df_reviews["band"] = df_reviews["score"].apply(_assign_band)
+    print("[pipeline] bands assigned", flush=True)
 
     band_counts = df_reviews["band"].value_counts().to_dict()
     neutral_count = int(band_counts.get("Neutral", 0))
@@ -78,15 +82,19 @@ def run(app_input: str, review_count: int) -> report.ReportData:
 
     negative_reviews = df_reviews[df_reviews["band"] == config.ANALYSIS_BAND].reset_index(drop=True)
     negative_count = len(negative_reviews)
+    print(f"[pipeline] {negative_count} negative reviews", flush=True)
 
     if negative_count < config.MIN_VIABLE_NEGATIVE_REVIEWS:
-        return _insufficient(
+        print("[pipeline] insufficient negative reviews, returning early", flush=True)
+        result = _insufficient(
             app_info, package_id, review_count, actual_count,
             f"Only {negative_count} negative (1-2 star) reviews were found among "
             f"{actual_count} scraped (need at least {config.MIN_VIABLE_NEGATIVE_REVIEWS}) "
             f"for a reliable comparison. Try a larger review count.",
             neutral_count=neutral_count, positive_count=positive_count, rating_distribution=rating_distribution,
         )
+        print("[pipeline] insufficient result built, returning", flush=True)
+        return result
 
     print(f"[pipeline] splitting {negative_count} negative reviews into snippets...", flush=True)
     df_snippets = snippets_mod.split_into_snippets(negative_reviews)
