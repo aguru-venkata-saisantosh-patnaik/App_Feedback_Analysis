@@ -216,12 +216,14 @@ def _run_async_job(package_id: str, review_count: int, email_addr: str):
 
 # ---------------------------------------------------------------- layout
 
-FORCE_LIGHT_JS = """
-() => {
+FORCE_LIGHT_HEAD = """
+<script>
+document.addEventListener('DOMContentLoaded', () => {
     const strip = () => document.body.classList.remove('dark');
     strip();
     new MutationObserver(strip).observe(document.body, { attributes: true, attributeFilter: ['class'] });
-}
+});
+</script>
 """
 
 HEADER_MARK = """
@@ -234,7 +236,6 @@ HEADER_MARK = """
 """
 
 with gr.Blocks(title="Review Diagnostic", css=THEME_CSS, theme=gr.themes.Base()) as demo:
-    demo.load(None, None, None, js=FORCE_LIGHT_JS)
     gr.HTML(
         f'<div class="header-row">{HEADER_MARK}<h1 class="header-title">Review Diagnostic</h1></div>'
         "<p>Paste a Play Store app and see what's actually driving negative reviews, and whether "
@@ -322,4 +323,5 @@ if __name__ == "__main__":
     demo.queue().launch(
         server_name="0.0.0.0",
         server_port=int(os.environ.get("PORT", 7860)),
+        head=FORCE_LIGHT_HEAD,
     )
