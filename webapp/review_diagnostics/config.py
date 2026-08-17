@@ -17,6 +17,11 @@ MIN_VIABLE_NEGATIVE_REVIEWS = 30
 SCRAPE_LANG = "en"
 SCRAPE_COUNTRY = "in"
 SCRAPE_MAX_RETRIES = 3
+# google-play-scraper calls urllib.request.urlopen() with no timeout, so a
+# slow/throttled response (common from data-center IPs) hangs forever --
+# scrape.py sets socket.setdefaulttimeout() to this value so a stall raises
+# instead, letting the retry loop above actually run.
+SCRAPE_TIMEOUT_SECONDS = 25
 
 # --- Snippet splitting ---
 MIN_SNIPPET_WORDS = 3

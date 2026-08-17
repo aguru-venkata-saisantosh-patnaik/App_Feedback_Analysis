@@ -1,11 +1,18 @@
 """Play Store scraping. Ported from data_prep.py, generalized for any app."""
 
 import re
+import socket
 import time
 
 import pandas as pd
 
 from . import config
+
+# google-play-scraper's internal urlopen() calls take no timeout argument,
+# so a stalled response hangs indefinitely instead of raising -- this sets
+# the process-wide default for stdlib blocking sockets so a stall surfaces
+# as socket.timeout, which the retry loop below can actually catch.
+socket.setdefaulttimeout(config.SCRAPE_TIMEOUT_SECONDS)
 
 
 def resolve_package_id(app_input: str) -> str:
