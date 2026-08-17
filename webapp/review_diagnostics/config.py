@@ -3,7 +3,12 @@ values here — every constant is either a genuine methodology parameter
 (validated during the Blinkit run) or a product limit set for this tool."""
 
 # --- Product limits ---
-INSTANT_MAX_REVIEWS = 200      # <= this: synchronous, shown in-browser, no email
+# Lowered from 200: on the free-tier host's 512MB RAM, a 150-review instant
+# run peaked at ~434MB during embedding/clustering and the process was
+# killed and restarted by the platform mid-request. 120 keeps peak memory
+# further from that ceiling; see also the CPU-only torch build in
+# render.yaml, which removes ~1.5GB of unused CUDA wheels from the image.
+INSTANT_MAX_REVIEWS = 120      # <= this: synchronous, shown in-browser, no email
 ASYNC_MAX_REVIEWS = 1000       # hard cap regardless of what's requested
 MIN_VIABLE_REVIEWS = 100       # below this many *scraped* reviews, abort before expensive stages
 # Only ~15-30% of an app's reviews are typically 1-2 star, so gating the
