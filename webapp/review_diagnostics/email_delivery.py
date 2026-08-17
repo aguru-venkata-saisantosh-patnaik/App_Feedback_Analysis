@@ -1,82 +1,59 @@
-"""Sends emails via Gmail's SMTP relay: a "your run has started" notice at
+"""Sends emails via SendGrid's HTTPS API: a "your run has started" notice at
 job kickoff, a failure notice on crash, and the finished report. The started/
 failure notices matter as much as the report itself -- the async path has
 no UI left watching it once the user closes the tab, so a missing
 completion email needs to read as an unambiguous "retry" signal.
 
-Gmail instead of a transactional-email API (Resend, etc.): those all
-require verifying a custom domain before they'll send to anyone other
-than the account owner's own address -- a real blocker for a free,
-no-infrastructure hobby tool with no domain. Gmail's SMTP relay sends
-from the operator's own Gmail address to any recipient with no domain
-verification at all, since it's authenticating as an address already
-owned and controlled by that Gmail account. Needs GMAIL_ADDRESS and a
-Gmail App Password (not the account password) in GMAIL_APP_PASSWORD --
-Google Account -> Security -> App passwords, requires 2-Step Verification
-enabled first."""
+HTTPS API instead of SMTP: live testing showed the free-tier host blocks
+outbound SMTP entirely (confirmed both 587/STARTTLS and 465/implicit-TLS
+hang until timeout with no response at all, the signature of a firewall
+silently dropping the traffic rather than rejecting it -- a common,
+deliberate anti-spam policy on free-tier PaaS hosts). Outbound HTTPS
+(443) isn't blocked -- it's how the app already talks to the Play Store.
+SendGrid instead of Resend: Resend's shared free-tier sender can only
+deliver to the account owner's own address unless a full custom domain
+is verified; SendGrid's free tier supports Single Sender Verification --
+proving ownership of one plain email address (a confirmation link, no
+DNS records) -- after which it can send to any recipient. Needs
+SENDGRID_API_KEY and SENDGRID_FROM_ADDRESS (the verified sender)."""
 
+import base64
 import os
-import smtplib
-import socket
-from email.mime.application import MIMEApplication
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+
+import requests
 
 from .report import ReportData
 
-GMAIL_SMTP_HOST = "smtp.gmail.com"
-# Tried in order: STARTTLS on 587 first, then implicit-TLS on 465 -- a live
-# failure ("Network is unreachable") on 587 turned out to be specific to
-# that port/mode on the host, not Gmail or the credentials, so this tries
-# both rather than hard-coding one.
-GMAIL_SMTP_PORTS = [(587, False), (465, True)]
-
-_orig_getaddrinfo = socket.getaddrinfo
-
-
-def _ipv4_only_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
-    """Some container hosts advertise an IPv6 route that isn't actually
-    usable, and getaddrinfo() returning an AAAA record first (with no
-    automatic fallback) surfaces as ENETUNREACH before IPv4 is ever tried.
-    Forcing AF_INET here -- only for the duration of the SMTP connection
-    attempt -- sidesteps that without needing to know in advance whether
-    it's actually the cause."""
-    return _orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+SENDGRID_API_URL = "https://api.sendgrid.com/v3/mail/send"
 
 
 def _send(to_email: str, subject: str, html: str, attachment: tuple[str, bytes] | None = None) -> None:
-    gmail_address = os.environ["GMAIL_ADDRESS"]
-    gmail_app_password = os.environ["GMAIL_APP_PASSWORD"]
+    api_key = os.environ["SENDGRID_API_KEY"]
+    from_address = os.environ["SENDGRID_FROM_ADDRESS"]
 
-    msg = MIMEMultipart()
-    msg["From"] = gmail_address
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg.attach(MIMEText(html, "html"))
-
+    payload = {
+        "personalizations": [{"to": [{"email": to_email}]}],
+        "from": {"email": from_address, "name": "Review Diagnostic"},
+        "subject": subject,
+        "content": [{"type": "text/html", "value": html}],
+    }
     if attachment:
         filename, content = attachment
-        part = MIMEApplication(content, Name=filename)
-        part["Content-Disposition"] = f'attachment; filename="{filename}"'
-        msg.attach(part)
+        payload["attachments"] = [{
+            "content": base64.b64encode(content).decode("ascii"),
+            "filename": filename,
+            "type": "text/csv",
+            "disposition": "attachment",
+        }]
 
-    last_err: Exception | None = None
-    for port, implicit_tls in GMAIL_SMTP_PORTS:
-        socket.getaddrinfo = _ipv4_only_getaddrinfo
-        try:
-            cls = smtplib.SMTP_SSL if implicit_tls else smtplib.SMTP
-            with cls(GMAIL_SMTP_HOST, port, timeout=20) as server:
-                if not implicit_tls:
-                    server.starttls()
-                server.login(gmail_address, gmail_app_password)
-                server.sendmail(gmail_address, [to_email], msg.as_string())
-            return
-        except Exception as e:
-            last_err = e
-            continue
-        finally:
-            socket.getaddrinfo = _orig_getaddrinfo
-    raise last_err
+    resp = requests.post(
+        SENDGRID_API_URL,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json=payload,
+        timeout=20,
+    )
+    if resp.status_code >= 300:
+        raise RuntimeError(f"SendGrid returned {resp.status_code}: {resp.text[:500]}")
 
 
 def send_started_notice(to_email: str, app_title: str, eta_minutes: int) -> None:

@@ -7,7 +7,7 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python server.py
     envVars:
-      - key: GMAIL_ADDRESS
+      - key: SENDGRID_API_KEY
         sync: false
-      - key: GMAIL_APP_PASSWORD
+      - key: SENDGRID_FROM_ADDRESS
         sync: false
