@@ -41,6 +41,13 @@ reviewCountNum.addEventListener('input', () => {
   updateReviewCountLabel();
 });
 
+appInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    lookupBtn.click();
+  }
+});
+
 lookupBtn.addEventListener('click', async () => {
   const val = appInput.value.trim();
   if (!val) return;
