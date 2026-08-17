@@ -53,8 +53,11 @@ def run(app_input: str, review_count: int) -> report.ReportData:
     package_id = scrape.resolve_package_id(app_input)
     review_count = min(review_count, config.ASYNC_MAX_REVIEWS)
 
+    print(f"[pipeline] fetching app info for {package_id}...", flush=True)
     app_info = scrape.scrape_app_info(package_id)
+    print(f"[pipeline] scraping {review_count} reviews...", flush=True)
     df_reviews = scrape.scrape_app_reviews(package_id, review_count)
+    print(f"[pipeline] scraped {len(df_reviews)} reviews", flush=True)
     actual_count = len(df_reviews)
 
     if actual_count < config.MIN_VIABLE_REVIEWS:
@@ -85,14 +88,18 @@ def run(app_input: str, review_count: int) -> report.ReportData:
             neutral_count=neutral_count, positive_count=positive_count, rating_distribution=rating_distribution,
         )
 
+    print(f"[pipeline] splitting {negative_count} negative reviews into snippets...", flush=True)
     df_snippets = snippets_mod.split_into_snippets(negative_reviews)
+    print(f"[pipeline] {len(df_snippets)} snippets", flush=True)
 
     reviews_meta = negative_reviews[["review_id", "score", "date_parsed", "reviewCreatedVersion"]].rename(
         columns={"score": "rating", "reviewCreatedVersion": "app_version"}
     )
     split = cohorts_mod.auto_split_cohorts(reviews_meta)
 
+    print("[pipeline] discovering categories...", flush=True)
     category_defs = discovery.discover_categories(df_snippets)
+    print(f"[pipeline] {len(category_defs)} categories discovered", flush=True)
     if not category_defs:
         return _insufficient(
             app_info, package_id, review_count, actual_count,
@@ -101,9 +108,11 @@ def run(app_input: str, review_count: int) -> report.ReportData:
             neutral_count=neutral_count, positive_count=positive_count, rating_distribution=rating_distribution,
         )
 
+    print("[pipeline] measuring categories...", flush=True)
     measured = measurement.measure_categories(df_snippets, category_defs)
     review_category = measurement.build_review_category_table(measured)
 
+    print("[pipeline] running stats engine...", flush=True)
     stats_df = stats_mod.stats_engine(review_category, split["cohort_a_ids"], split["cohort_b_ids"])
     stats_df = stats_mod.apply_correction(stats_df)
 
