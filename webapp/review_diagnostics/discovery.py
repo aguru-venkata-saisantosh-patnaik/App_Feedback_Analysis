@@ -1,9 +1,28 @@
 """Unsupervised topic discovery over Negative-band snippets. Collapses the
-notebook's embed -> resolution-search -> BERTopic-fit -> extract-definitions
+notebook's embed -> resolution-search -> cluster -> extract-definitions
 stages (previously copy-pasted per band) into one function, called once
 since analysis scope is locked to the Negative band. No disk caching --
 every run is a fresh, ephemeral process, so there's nothing to reload from
-a prior run."""
+a prior run.
+
+Deliberately lighter-weight than the case-study pipeline
+(final_pipeline_V2.ipynb, unchanged, still uses BERTopic/UMAP/HDBSCAN
+faithfully): this generalized webapp runs on free-tier hosting with a
+512MB ceiling, where the PyTorch + numba stack (sentence-transformers,
+umap-learn, standalone hdbscan) alone pushed peak memory to the ceiling
+before any real clustering happened. Swapped for:
+  - fastembed (ONNX runtime) instead of sentence-transformers (PyTorch) --
+    same MiniLM model, no torch dependency at all.
+  - PCA instead of UMAP for pre-clustering dimensionality reduction --
+    linear rather than manifold-learning, but avoids numba entirely
+    (UMAP has no non-numba implementation).
+  - scikit-learn's built-in HDBSCAN (Cython, no numba) instead of the
+    standalone hdbscan package -- same algorithm, same API, different
+    (much lighter) implementation.
+  - A direct class-based TF-IDF keyword extraction instead of pulling in
+    bertopic as a library -- bertopic hard-depends on hdbscan, umap-learn,
+    and sentence-transformers regardless of which parts are actually
+    used, so keeping it as a dependency alone would undo all of the above."""
 
 import numpy as np
 import pandas as pd
@@ -40,7 +59,7 @@ def _resolution_search(reduced, n):
     where mcs >= n are skipped as degenerate. min_samples candidates are
     derived as fractions of each mcs (not fixed absolute values) so there's
     always at least one valid combination regardless of n."""
-    import hdbscan
+    from sklearn.cluster import HDBSCAN
 
     lo, hi = config.TOPIC_COUNT_RANGE
     rows = []
@@ -50,7 +69,7 @@ def _resolution_search(reduced, n):
             continue
         ms_candidates = sorted({max(3, mcs // 4), max(3, mcs // 2), mcs})
         for ms in ms_candidates:
-            clusterer = hdbscan.HDBSCAN(
+            clusterer = HDBSCAN(
                 min_cluster_size=mcs, min_samples=ms, metric="euclidean", cluster_selection_method="eom"
             )
             labels = clusterer.fit_predict(reduced)
@@ -74,55 +93,47 @@ def _resolution_search(reduced, n):
     return results, best
 
 
-def _fit_bertopic(docs, reduced, mcs, ms):
-    """(given UMAP/HDBSCAN params) -> BERTopic c-TF-IDF labels ->
-    similarity-based auto-merge. No hand-assigned labels anywhere.
+def _extract_category_definitions(texts, embeddings, labels) -> dict:
+    """{topic_id: {keywords, count, examples, centroid}}. Centroid lives in
+    the original embedding space (not the PCA-reduced space used for
+    clustering) since measurement.py compares fresh embeddings against it
+    via cosine similarity.
 
-    Takes the UMAP-reduced coordinates already computed by the resolution
-    search, via BERTopic's documented pass-through reducer, instead of
-    letting BERTopic re-run its own full UMAP fit on the raw embeddings --
-    on the free-tier host this second fit was the single biggest memory/CPU
-    cost, since two full UMAP models (with their own numba-compiled nearest-
-    neighbor graphs) ended up alive at once for no benefit; the resolution
-    search already found the coordinates BERTopic would recompute here."""
-    import hdbscan
-    from bertopic import BERTopic
-    from bertopic.dimensionality import BaseDimensionalityReduction
+    Keywords come from a class-based TF-IDF: each cluster's per-term count
+    weighted against how common that term is corpus-wide, the same idea
+    BERTopic's c-TF-IDF uses -- terms frequent in one cluster but rare
+    elsewhere score highest. Labels are never hand-assigned; only c-TF-IDF
+    terms computed from this run's actual data feed into keywords below."""
     from sklearn.feature_extraction.text import CountVectorizer
 
-    hdbscan_model = hdbscan.HDBSCAN(
-        min_cluster_size=mcs, min_samples=ms, metric="euclidean",
-        cluster_selection_method="eom", prediction_data=True,
-    )
-    vectorizer_model = CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=1)
-    topic_model = BERTopic(
-        umap_model=BaseDimensionalityReduction(), hdbscan_model=hdbscan_model,
-        vectorizer_model=vectorizer_model, calculate_probabilities=False, verbose=False,
-    )
-    topic_model.fit_transform(docs, embeddings=reduced)
-    topic_model.reduce_topics(docs, nr_topics="auto")
-    return topic_model
+    unique = sorted(set(labels) - {-1})
+    if not unique:
+        return {}
 
+    vectorizer = CountVectorizer(stop_words="english", ngram_range=(1, 2), min_df=1)
+    doc_term = vectorizer.fit_transform(texts)
+    terms = vectorizer.get_feature_names_out()
+    tf_corpus = np.asarray(doc_term.sum(axis=0)).flatten()
+    avg_words_per_class = doc_term.sum() / len(unique)
 
-def _extract_category_definitions(topic_model, embeddings) -> dict:
-    """{topic_id: {keywords, count, examples, centroid}}. Centroid lives in
-    the original embedding space (not the 5-dim UMAP space used for
-    clustering) since measurement.py compares fresh embeddings against it
-    via cosine similarity."""
-    info = topic_model.get_topic_info()
-    final_labels = np.array(topic_model.topics_)
     defs = {}
-    for _, row in info.iterrows():
-        tid = row["Topic"]
-        if tid == -1:
-            continue
-        keywords = [w for w, _ in topic_model.get_topic(tid)]
-        reps = topic_model.get_representative_docs(tid) or []
-        centroid = embeddings[final_labels == tid].mean(axis=0)
+    for tid in unique:
+        mask = labels == tid
+        tf_class = np.asarray(doc_term[mask].sum(axis=0)).flatten()
+        score = tf_class * np.log1p(avg_words_per_class / (tf_corpus + 1))
+        ranked = np.argsort(score)[::-1]
+        keywords = [terms[i] for i in ranked if tf_class[i] > 0][:12]
+
+        cluster_embeddings = embeddings[mask]
+        centroid = cluster_embeddings.mean(axis=0)
+        cluster_texts = [t for t, m in zip(texts, mask) if m]
+        dists = np.linalg.norm(cluster_embeddings - centroid, axis=1)
+        examples = [cluster_texts[i] for i in np.argsort(dists)[:5]]
+
         defs[str(tid)] = {
-            "keywords": keywords[:12],
-            "count": int(row["Count"]),
-            "examples": reps[:5],
+            "keywords": keywords,
+            "count": int(mask.sum()),
+            "examples": examples,
             "centroid": centroid,
         }
     return defs
@@ -136,20 +147,21 @@ def discover_categories(negative_snippets: pd.DataFrame) -> dict:
     is too small/degenerate to cluster meaningfully."""
     import gc
 
-    import umap
-    from sentence_transformers import SentenceTransformer
+    from fastembed import TextEmbedding
+    from sklearn.decomposition import PCA
 
     texts = negative_snippets["snippet"].astype(str).tolist()
     n = len(texts)
     if n < config.MIN_MEMBERS_FOR_CALIBRATION * 2:
         return {}
 
-    embed_model = SentenceTransformer(config.EMBED_MODEL_NAME, device="cpu")
-    embeddings = embed_model.encode(texts, batch_size=128, show_progress_bar=False)
+    embed_model = TextEmbedding(model_name=config.EMBED_MODEL_NAME, providers=config.EMBED_PROVIDERS, threads=1)
+    embeddings = np.array(list(embed_model.embed(texts, batch_size=16)))
     del embed_model
     gc.collect()
 
-    reducer = umap.UMAP(n_neighbors=15, n_components=5, min_dist=0.0, metric="cosine", random_state=42)
+    n_components = min(5, embeddings.shape[1], n - 1)
+    reducer = PCA(n_components=n_components, random_state=42)
     reduced = reducer.fit_transform(embeddings)
     del reducer
     gc.collect()
@@ -158,5 +170,11 @@ def discover_categories(negative_snippets: pd.DataFrame) -> dict:
     if best is None:
         return {}
 
-    topic_model = _fit_bertopic(texts, reduced, int(best.mcs), int(best.ms))
-    return _extract_category_definitions(topic_model, embeddings)
+    from sklearn.cluster import HDBSCAN
+
+    clusterer = HDBSCAN(
+        min_cluster_size=int(best.mcs), min_samples=int(best.ms),
+        metric="euclidean", cluster_selection_method="eom",
+    )
+    labels = clusterer.fit_predict(reduced)
+    return _extract_category_definitions(texts, embeddings, labels)

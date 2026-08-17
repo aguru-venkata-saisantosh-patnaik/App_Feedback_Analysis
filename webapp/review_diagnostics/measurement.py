@@ -46,18 +46,16 @@ def measure_categories(negative_snippets: pd.DataFrame, category_defs: dict) -> 
     than index-aligning a subset back in, at the cost of a bit of repeat
     work that's trivial at this tool's data scale (capped at 1,000 reviews).
     """
-    from sentence_transformers import SentenceTransformer
+    from fastembed import TextEmbedding
 
     category_ids = list(category_defs.keys())
     category_centroids = np.array([category_defs[tid]["centroid"] for tid in category_ids])
     category_centroids_norm = category_centroids / np.linalg.norm(category_centroids, axis=1, keepdims=True)
 
-    embed_model = SentenceTransformer(config.EMBED_MODEL_NAME, device="cpu")
+    embed_model = TextEmbedding(model_name=config.EMBED_MODEL_NAME, providers=config.EMBED_PROVIDERS, threads=1)
     all_snips = negative_snippets.reset_index(drop=True)
 
-    embeddings = embed_model.encode(
-        all_snips["snippet"].astype(str).tolist(), batch_size=256, show_progress_bar=False
-    )
+    embeddings = np.array(list(embed_model.embed(all_snips["snippet"].astype(str).tolist(), batch_size=16)))
     thresholds = _calibrate_thresholds(category_ids, category_centroids_norm, embeddings)
     threshold_array = np.array([thresholds[tid] for tid in category_ids])
 

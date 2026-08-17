@@ -37,7 +37,8 @@ BAND_NEUTRAL = (3, 3)
 BAND_POSITIVE = (4, 5)
 ANALYSIS_BAND = "Negative"  # locked scope: complaint-focused only
 
-# --- Discovery (BERTopic resolution search) ---
+# --- Discovery (resolution search over PCA-reduced embeddings + sklearn's
+# built-in HDBSCAN, then class-based TF-IDF keyword extraction) ---
 # min_cluster_size candidates as a fraction of n (floor of 5, so this still
 # works on small demo-sized inputs); min_samples candidates are then
 # derived as fractions of each min_cluster_size rather than fixed absolute
@@ -46,7 +47,19 @@ ANALYSIS_BAND = "Negative"  # locked scope: complaint-focused only
 # valid combinations at small n, since every candidate had min_samples >
 # min_cluster_size and got skipped.
 MIN_CLUSTER_SIZE_PCTS = [0.02, 0.03, 0.05, 0.075, 0.1]
-EMBED_MODEL_NAME = "all-MiniLM-L6-v2"
+# fastembed's naming (HF-style, not the bare sentence-transformers name) --
+# same all-MiniLM-L6-v2 model, ONNX runtime instead of PyTorch. Both
+# discovery.py and measurement.py must use the same model, since category
+# centroids and fresh snippet embeddings are compared directly.
+EMBED_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+# onnxruntime's default CPU memory arena grows by doubling and never
+# shrinks -- for this tool's small, one-shot batches that alone roughly
+# doubled peak memory (measured: ~561MB -> ~298MB for a 120-snippet batch
+# with arena growth disabled). Passed as `providers=` to fastembed's
+# TextEmbedding in both discovery.py and measurement.py.
+EMBED_PROVIDERS = [
+    ("CPUExecutionProvider", {"arena_extend_strategy": "kSameAsRequested", "enable_cpu_mem_arena": False})
+]
 TOPIC_COUNT_RANGE = (4, 25)
 MAX_NOISE_PCT = 40
 
