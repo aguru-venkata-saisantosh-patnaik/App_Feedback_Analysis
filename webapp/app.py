@@ -19,6 +19,13 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
+# Bounds huggingface_hub's per-request download timeout -- fastembed's model
+# fetch goes through this on first use, and a stalled response (same failure
+# mode as the google-play-scraper hang scrape.py works around) would
+# otherwise hang a live request instead of failing fast. Set before any
+# huggingface_hub/fastembed import so it's read at import time.
+os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "30")
+
 import gradio as gr
 import requests
 
@@ -268,7 +275,21 @@ with gr.Blocks(title="Review Diagnostic", css=THEME_CSS, theme=gr.themes.Base())
         outputs=[status, report_html, download_file],
     )
 
+def _prewarm_embedding_model():
+    """Forces the fastembed model download/cache to happen once at boot,
+    with output visible in deploy logs, instead of silently blocking the
+    first real user's request (and, if that first download ever stalls,
+    failing during startup where it's obvious rather than inside a
+    request where it just looks like a hang)."""
+    from fastembed import TextEmbedding
+
+    print(f"Pre-warming embedding model {config.EMBED_MODEL_NAME}...", flush=True)
+    TextEmbedding(model_name=config.EMBED_MODEL_NAME, providers=config.EMBED_PROVIDERS, threads=1)
+    print("Embedding model ready.", flush=True)
+
+
 if __name__ == "__main__":
+    _prewarm_embedding_model()
     # 0.0.0.0 (not Gradio's 127.0.0.1 default) so the container's external
     # load balancer -- Render's, or a similar host's -- can actually reach
     # it; PORT is Render's own env var for which port it expects the app to
