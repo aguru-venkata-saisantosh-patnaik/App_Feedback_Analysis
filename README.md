@@ -5,6 +5,8 @@ reviews, and whether it's gotten better or worse over time — built as a
 case study on Blinkit, then generalized into a self-serve web app that
 works on any Play Store app.
 
+**Try the live app:** [review-diagnostic.onrender.com](https://review-diagnostic.onrender.com/)
+
 ## Table of Contents
 
 - [What this is](#what-this-is)
@@ -21,10 +23,11 @@ works on any Play Store app.
 Two things, same underlying methodology:
 
 1. **[`final_pipeline_V2.ipynb`](final_pipeline_V2.ipynb)** — the 10-stage
-   analysis pipeline that produced **[`Blinkit_Case_Study_2.pdf`](Blinkit_Case_Study_2.pdf)**.
+   analysis pipeline that produced **[`Blinkit_Case_Study.pdf`](Blinkit_Case_Study.pdf)**.
 2. **[`webapp/`](webapp/)** — the same methodology, productized: paste any
    Play Store app and package ID, get the same kind of diagnostic report
-   back, on demand.
+   back, on demand. Live at
+   [review-diagnostic.onrender.com](https://review-diagnostic.onrender.com/).
 
 The pipeline notebook is the actual analysis code behind the case study —
 included to document exactly how the finding was produced, not as a
@@ -54,28 +57,29 @@ evidence on its own.
 Eternal Ltd disclosed a 2.0% QoQ rise in Blinkit's direct cost per order,
 to ₹115 in Q1 FY27 — a 10bps hit to contribution margin. The case study
 matches 588,832 Play Store reviews to the same disclosed quarters to
-diagnose which operational failure is actually behind it.
+diagnose which operational failure is the leading hypothesis behind it.
 
-<img src="images_v2/case_study_headline.png" alt="The answer, up front: cold-chain failure, not service, speed, or cancellations. Melted and spoiled-item complaints were the only failure mode to more than double QoQ and survive every robustness test across two independent pipeline runs." width="100%">
+<img src="images_v2/case_study_headline.png" alt="The answer, up front: cold-chain is the strongest validated signal, not service, speed, or cancellations. Melted and spoiled-item complaints were the only failure mode to more than double QoQ and survive every robustness test across two independent pipeline runs." width="100%">
 
-**[Blinkit_Case_Study_2.pdf](Blinkit_Case_Study_2.pdf)** — the full
-16-slide deck. Four of the 25 discovered categories shifted significantly
-quarter-over-quarter; only one both survived version-mix reweighting *and*
+**[Blinkit_Case_Study.pdf](Blinkit_Case_Study.pdf)** — the full case study
+deck. Four of the 25 discovered categories shifted significantly
+quarter-over-quarter; only two both survived version-mix reweighting *and*
 replicated in an independently-run pipeline:
 
 | Complaint category | Q4 FY26 | Q1 FY27 | Rate ratio | Verdict |
 |---|---|---|---|---|
-| **Cold-chain / melted items** (ice cream, chilled, cold) | 0.90% | 2.13% | **2.37×** | 🟡 **Priority** — validated, drives the finding |
+| **Cold-chain / melted items** (ice cream, chilled, cold) | 0.90% | 2.13% | **2.37×** | 🟡 **Priority** — validated, names a specific, fixable mechanism |
+| General dissatisfaction (generic "bad experience") | 9.69% | 11.17% | 1.15× | Corroborating — validated, but names no single fixable mechanism |
 | Produce quality (rotten vegetables/fruits) | 3.03% | 3.62% | 1.20× | Unstable — doesn't replicate across runs |
-| General dissatisfaction (generic "bad experience") | 9.69% | 11.17% | 1.15× | Replicates, but not a specific/actionable mechanism |
 | Delivery / handling charges | 8.01% | 6.72% | 0.84× | Not robust — falls apart under version-mix reweighting |
 
 21 other categories — including customer care, late delivery, rider
 behaviour, cancellations, refunds, and wrong/missing items — showed no
-significant quarter-over-quarter shift; all cleared the 30-review sample
-floor, so these are genuine nulls, not underpowered tests.
+statistically significant or material quarter-over-quarter shift; all
+cleared the 30-review sample floor, so these are genuine nulls, not
+underpowered tests.
 
-<img src="images_v2/case_study_findings.png" alt="Executive summary: cold-chain failure is the only validated driver of the ₹115 cost rise. Full breakdown of all four significant categories plus the recommended fix (insulated packaging, freezer uptime audit, dwell-time SLA) and sizing (₹7.5cr–₹37.3cr of the ₹74.6cr rise, depending on cold-chain's attributed share)." width="100%">
+<img src="images_v2/case_study_findings.png" alt="Executive summary: cold-chain is the strongest validated operational signal and leading hypothesis behind the cost rise. Full breakdown of all four significant categories plus the recommended fix (insulated packaging, freezer uptime audit, dwell-time SLA) and sizing (an illustrative ₹7.5cr-₹37.3cr of the ₹74.6cr rate effect, depending on cold-chain's attributed share)." width="100%">
 
 **[final_pipeline_v2_architecture.html](final_pipeline_v2_architecture.html)**
 — the 10-stage architecture diagram the notebook implements.
@@ -96,7 +100,8 @@ floor, so these are genuine nulls, not underpowered tests.
 
 `webapp/` turns the same methodology into a tool that works on any Play
 Store app, not just Blinkit — no hardcoded hypotheses, no fixed keyword
-lists, no Blinkit-specific dates.
+lists, no Blinkit-specific dates. Live at
+**[review-diagnostic.onrender.com](https://review-diagnostic.onrender.com/)**.
 
 - Paste a package ID and pick how many reviews to analyze.
 - **Up to 200 reviews**: instant, rendered in-browser.
@@ -114,23 +119,24 @@ dev instructions.
 ## Repository structure
 
 ```
-final_pipeline_V2.ipynb            The Blinkit case study's analysis pipeline (10 stages)
+final_pipeline_V2.ipynb              The Blinkit case study's analysis pipeline (10 stages)
 final_pipeline_v2_architecture.html  Architecture diagram for the pipeline above
-Blinkit_Case_Study_2.pdf           16-slide case study deck (the pipeline's output)
-images_v2/                         Slide exports embedded above (headline, findings, data lens)
-requirements_v2.txt                Dependencies for final_pipeline_V2.ipynb
-webapp/                            Generalized, self-serve version of the same methodology
-  app.py                             Gradio UI, job queue, keep-alive thread
-  theme.css                          Design system
-  requirements.txt                   Dependencies for the web app
-  review_diagnostics/                scrape / discover / measure / test / report modules
-render.yaml                        Render deployment blueprint for webapp/
+Blinkit_Case_Study.pdf               Case study deck (the pipeline's output)
+meesho_case_study.pdf                V1's case study deck (see "Earlier project" below)
+images_v2/                           Slide exports embedded above (headline, findings, data lens)
+requirements_v2.txt                  Dependencies for final_pipeline_V2.ipynb
+webapp/                              Generalized, self-serve version of the same methodology
+  server.py                            FastAPI app, job queue, keep-alive thread
+  static/                              Frontend (HTML/JS/CSS)
+  requirements.txt                     Dependencies for the web app
+  review_diagnostics/                  scrape / discover / measure / test / report modules
+render.yaml                          Render deployment blueprint for webapp/
+LICENSE
 
-# Earlier project (see below)
-AI_App_Review_Insights.ipynb       V1: LDA + Gemini pipeline, Meesho case study
-meesho_case_study.pdf
-images/
-requirements.txt
+v1_meesho_review_insights/           Earlier, separate project (see below)
+  AI_App_Review_Insights.ipynb         V1: LDA + Gemini pipeline
+  images/                              Supporting visuals
+  requirements.txt                     Dependencies for the V1 notebook
 ```
 
 ## Running it
@@ -139,10 +145,8 @@ requirements.txt
 
 ```bash
 pip install -r webapp/requirements.txt
-python webapp/app.py
+python webapp/server.py
 ```
-
-Opens at `http://localhost:7860`.
 
 **The case study notebook** (reference — needs its own pre-processed input
 data, not included here):
@@ -156,15 +160,20 @@ jupyter notebook final_pipeline_V2.ipynb
 
 `webapp/` is host-agnostic and binds to `0.0.0.0:$PORT`. See
 [`render.yaml`](render.yaml) at the repo root for a ready-to-use Render
-Blueprint (`rootDir: ./webapp`).
+Blueprint (`rootDir: ./webapp`). The current deployment is live at
+[review-diagnostic.onrender.com](https://review-diagnostic.onrender.com/).
 
 ## Earlier project (V1)
 
-This repo also contains an earlier, separate project: an LDA + Gemini
-review-insight pipeline applied to a Meesho case study —
-[`AI_App_Review_Insights.ipynb`](AI_App_Review_Insights.ipynb) and
-[`meesho_case_study.pdf`](meesho_case_study.pdf), with supporting visuals
-in [`images/`](images/) and its own [`requirements.txt`](requirements.txt).
+[`v1_meesho_review_insights/`](v1_meesho_review_insights/) contains an
+earlier, separate project: an LDA + Gemini review-insight pipeline
+applied to a Meesho case study —
+[`AI_App_Review_Insights.ipynb`](v1_meesho_review_insights/AI_App_Review_Insights.ipynb),
+with supporting visuals in
+[`images/`](v1_meesho_review_insights/images/) and its own
+[`requirements.txt`](v1_meesho_review_insights/requirements.txt). Its
+output deck, **[`meesho_case_study.pdf`](meesho_case_study.pdf)**, stays
+at the repo root alongside the Blinkit case study.
 
 ## License
 
